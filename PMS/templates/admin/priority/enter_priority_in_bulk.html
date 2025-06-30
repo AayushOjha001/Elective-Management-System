@@ -1,0 +1,117 @@
+{% extends 'admin/base_site.html' %}
+{% load i18n static %}
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+    &rsaquo; <a href="">{% trans 'Enter priority ' %}</a>
+</div>
+{% endblock %}
+
+{% block content %}
+<form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    {{form.as_p}}
+    <button class="button" type="submit" name="_get_formset"> Enter Priorities</button>
+    <br>
+    {% if has_data %}
+    {% trans 'Here are the subjects for selected semester' %}
+    {% for subject in elective_subjects %}
+    <br>
+    {{forloop.counter}}) {{subject}}
+    {% endfor %}
+    <br>
+    <h3>
+        {% if form_data.enter_from_text %}
+        {% trans 'Enter the priority selections by students separated by spaces ' %}
+        {% else %}
+        {% trans 'Select the priority from the drop down' %}
+        {% endif %}
+    </h3>
+    <p style="color:green"> {{message}}</p>
+    {% if not is_success %}
+    {{ formset.management_form }}
+    <table id="formset" class="form">
+        {% for form in formset.forms %}
+        {{ form.non_field_errors }}
+        {% if forloop.first %}
+        <thead>
+        <tr>
+            {% for field in form.visible_fields %}
+            <th>{{ field.label|capfirst }}</th>
+            {% endfor %}
+        </tr>
+        </thead>
+        {% endif %}
+
+        <tr class="{% cycle row1 row2 %}">
+
+            {% for field in form.visible_fields %}
+            <td>
+
+                {# Include the hidden fields in the form #}
+                {% if forloop.first %}
+                {{ form.non_field_errors }}
+                {% for hidden in form.hidden_fields %}
+                {{ hidden }}
+                {% endfor %}
+                {% endif %}
+                {{ field.errors }}
+                {{ field }}
+            </td>
+            {% endfor %}
+        </tr>
+        {% endfor %}
+    </table>
+
+    <button type="submit" class="button" name="_post_priorities"> Submit</button>
+    {% endif %}
+    {% endif %}
+</form>
+</div>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+<script>
+$("#id_level").click(function () {
+        var academic_level_id = $(this).val();
+        $.ajax({
+            url: '{% url "get-faculty-according-to-level" %}',
+            data: {
+                'academic_level_id': academic_level_id,
+            },
+            success: function (response) {
+                var  new_options = response;
+                $('#id_stream').empty();
+                $.each(new_options, function(key, value) {
+                    $('#id_stream')
+                        .append($('<option>', { value : value.value })
+                        .text(value.display_text));
+                });
+            }
+    });
+});
+
+$("#id_level").click(function () {
+        var academic_level_id = $(this).val();
+        $.ajax({
+            url: '{% url "get-semester-according-to-level" %}',
+            data: {
+                'academic_level_id': academic_level_id,
+            },
+            success: function (response) {
+                var  new_options = response;
+                $('#id_semester').empty();
+                $.each(new_options, function(key, value) {
+                    $('#id_semester')
+                        .append($('<option>', { value : value.value })
+                        .text(value.display_text));
+                });
+            }
+    });
+    });
+
+
+
+
+
+
+</script>
+{% endblock %}

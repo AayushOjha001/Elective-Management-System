@@ -1,0 +1,31 @@
+{% extends 'admin/index.html' %}
+{% load i18n static %}
+
+{% block content %}
+
+{{block.super}}
+{% block sidebar1 %}
+<div id="content-related">
+    <div class="module" id="recent-actions">
+        <h2>{% trans 'Enter students priority ' %}</h2>
+        <!--<input style="max-width:100%" type="image" src="{% static "images/result.png"%}" />-->
+        <a href="{% url "enter_priorities" %}">
+            <img style="max-width:100%" src="{% static "images/data_entry.png"%}">
+        </a>
+        <!--<img style="max-width:100%" src="{% static "images/result.png"%}">-->
+        <!--<button style="background: {% static "images/result.png"%}"/>-->
+        <h2>{% trans 'Priority Result ' %}</h2>
+        <!--<input style="max-width:100%" type="image" src="{% static "images/result.png"%}" />-->
+        <a href="{% url "display_result" %}">
+            <img style="max-width:100%" src="{% static "images/result.png"%}">
+        </a>
+        <!--<img style="max-width:100%" src="{% static "images/result.png"%}">-->
+        <!--<button style="background: {% static "images/result.png"%}"/>-->
+
+    </div>
+</div>
+{% endblock %}
+{% endblock %}
+
+{% block sidebar %}
+{% endblock %}

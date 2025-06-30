@@ -1,0 +1,50 @@
+{% extends 'admin/base_site.html' %}
+{% block content %}
+{% for subject in subjects %}
+
+{% endfor %}
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+
+<script>
+
+$("#id_academic_level").click(function () {
+        var academic_level_id = $(this).val();
+        $.ajax({
+            url: '{% url "get-faculty-according-to-level" %}',
+            data: {
+                'academic_level_id': academic_level_id,
+            },
+            success: function (response) {
+                var  new_options = response;
+                $('#id_faculty').empty();
+                $.each(new_options, function(key, value) {
+                    $('#id_faculty')
+                        .append($('<option>', { value : value.value })
+                        .text(value.display_text));
+                });
+            }
+    });
+    });
+$("#id_academic_level").click(function () {
+        var academic_level_id = $(this).val();
+        $.ajax({
+            url: '{% url "get-faculty-according-to-level" %}',
+            data: {
+                'academic_level_id': academic_level_id,
+            },
+            success: function (response) {
+                var  new_options = response;
+                $('#id_faculty').empty();
+                $.each(new_options, function(key, value) {
+                    $('#id_faculty')
+                        .append($('<option>', { value : value.value })
+                        .text(value.display_text));
+                });
+            }
+    });
+    });
+
+
+
+</script>
+{% endblock %}

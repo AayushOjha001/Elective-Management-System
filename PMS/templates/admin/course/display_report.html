@@ -1,0 +1,121 @@
+{% extends 'admin/base_site.html' %}
+{% load i18n static %}
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+    &rsaquo; <a href="">{% trans 'Generate result' %}</a>
+</div>
+{% endblock %}
+
+{% block content %}
+{% if not is_download %}
+<form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    {{form.as_p}}
+    <button class="button" type="submit"> View priority result</button>
+    <!--<button class="button" type="submit" name="_get_pdf"> Get PDF</button>-->
+</form>
+{% endif %}
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+{% if has_data %}
+{% if is_data_entry_ok %}
+<table border="2px">
+    <tr>
+        <th>Subject Name</th>
+        <th>Student count</th>
+        <th>Roll number</th>
+        <th>Student name</th>
+    </tr>
+    {% for subject in result%}
+    <tr>
+        <td rowspan="{{subject.row_count}}" class="sub_name">
+            {{subject.subject_name}}
+        </td>
+
+        <td rowspan="{{subject.row_count}}">
+            {{subject.student_count}}
+        </td>
+        {% if subject.student_count == 0 %}
+        <td></td>
+        <td></td>
+        {% endif %}
+        {% for student in subject.students %}
+        {% if forloop.counter == 1 %}
+        <td> {{student.roll_number}}</td>
+        <td> {{student.name}}</td>
+        {% endif %}
+        {% endfor %}
+    </tr>
+    {% for student in subject.students %}
+    {% if forloop.counter != 1 %}
+    <tr>
+        <td> {{student.roll_number}}</td>
+        <td> {{student.name}}</td>
+    </tr>
+    {% endif %}
+    {% endfor %}
+    {% endfor %}
+</table>
+{% else %}
+{% trans 'Probable reasons for error:'%}
+<br>
+{% trans 'Available subjects for selected semester:'%} {{available_subject_count }}
+
+<ul>
+    {% for message in outlier_messages %}
+    <li>{{message}}</li>
+    {% endfor %}
+</ul>
+{% endif%}
+
+{% endif %}
+
+
+<script>
+
+$("#id_level").click(function () {
+        var academic_level_id = $(this).val();
+        $.ajax({
+            url: '{% url "get-faculty-according-to-level" %}',
+            data: {
+                'academic_level_id': academic_level_id,
+            },
+            success: function (response) {
+                var  new_options = response;
+                $('#id_stream').empty();
+                $.each(new_options, function(key, value) {
+                    $('#id_stream')
+                        .append($('<option>', { value : value.value })
+                        .text(value.display_text));
+                });
+            }
+    });
+
+
+    });
+$("#id_level").click(function () {
+        var academic_level_id = $(this).val();
+        $.ajax({
+            url: '{% url "get-semester-according-to-level" %}',
+            data: {
+                'academic_level_id': academic_level_id,
+            },
+            success: function (response) {
+                var  new_options = response;
+                $('#id_semester').empty();
+                $.each(new_options, function(key, value) {
+                    $('#id_semester')
+                        .append($('<option>', { value : value.value })
+                        .text(value.display_text));
+                });
+            }
+    });
+    });
+
+
+
+
+
+</script>
+
+{% endblock %}

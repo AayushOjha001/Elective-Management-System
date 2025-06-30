@@ -1,0 +1,34 @@
+.distributor .sub_name{
+margin-right    : 1px;
+background-color: #ccc;
+}
+@page { size: A2 }
+
+@page  {
+    margin: 20pt;
+    padding-top: 5px;
+}
+tr,
+th,
+td {
+
+    vertical-align: middle;
+    width:100%;
+    padding:5px;
+}
+
+html {
+    font-family: Helvetica;
+    font-weight: normal;
+    color: #000000;
+    background-color: transparent;
+    margin-top: 5px;
+    padding-top: 15px;
+    line-height: 150%;
+    border: 1px none;
+    display: inline;
+    width: auto;
+    height: auto;
+    white-space: normal;
+    gravity:center;
+}
