@@ -11,8 +11,26 @@
 <form method="post" enctype="multipart/form-data">
     {% csrf_token %}
     {{form.as_p}}
+    
+    <!-- Excel Upload Section -->
+    <div style="margin: 15px 0; padding: 10px; background-color: #f0f8ff; border: 1px solid #ddd; border-radius: 5px;">
+        <label for="excel_file" style="font-weight: bold;">📊 Upload Excel File:</label>
+        <input type="file" id="excel_file" name="excel_file" accept=".xlsx,.xls" style="margin: 5px;">
+        <button type="submit" name="_upload_excel" class="button" style="background-color: #4CAF50; color: white;">
+            📁 Upload Excel
+        </button>
+    </div>
+    
     <button class="button" type="submit" name="_get_formset"> Enter Priorities</button>
     <br>
+    
+    <!-- Move message display here - outside of has_data condition -->
+    {% if message %}
+    <div style="margin: 10px 0; padding: 10px; background-color: #d4edda; border: 1px solid #c3e6cb; color: #155724; border-radius: 5px;">
+        <strong>✅ {{ message }}</strong>
+    </div>
+    {% endif %}
+    
     {% if has_data %}
     {% trans 'Here are the subjects for selected semester' %}
     {% for subject in elective_subjects %}
@@ -27,7 +45,7 @@
         {% trans 'Select the priority from the drop down' %}
         {% endif %}
     </h3>
-    <p style="color:green"> {{message}}</p>
+    
     {% if not is_success %}
     {{ formset.management_form }}
     <table id="formset" class="form">
@@ -44,10 +62,8 @@
         {% endif %}
 
         <tr class="{% cycle row1 row2 %}">
-
             {% for field in form.visible_fields %}
             <td>
-
                 {# Include the hidden fields in the form #}
                 {% if forloop.first %}
                 {{ form.non_field_errors }}
@@ -67,7 +83,7 @@
     {% endif %}
     {% endif %}
 </form>
-</div>
+
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
 <script>
 $("#id_level").click(function () {
@@ -106,12 +122,6 @@ $("#id_level").click(function () {
                 });
             }
     });
-    });
-
-
-
-
-
-
+});
 </script>
 {% endblock %}
