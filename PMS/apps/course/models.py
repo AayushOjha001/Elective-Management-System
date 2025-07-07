@@ -1,6 +1,6 @@
 from django.db import models
-
-
+from django.core.validators import MinValueValidator
+from django.core.exceptions import ValidationError
 # Create your models here.
 
 
@@ -48,6 +48,21 @@ class ElectiveSubject(models.Model):
     subject_name = models.CharField(max_length=80)
     elective_for = models.ForeignKey(ElectiveSession, on_delete=models.CASCADE)
     stream = models.ForeignKey(Stream, on_delete=models.PROTECT)
+    min_students = models.PositiveIntegerField(
+        verbose_name='Minimum number of students required',
+        default=10,
+        validators=[MinValueValidator(5)]
+    )
+    max_students = models.PositiveIntegerField(
+        verbose_name='Maximum number of students allowed',
+        default=24
+    )
+
+    def clean(self):
+        if self.max_students <= self.min_students:
+            raise ValidationError(
+                {'max_students': 'Maximum students must be greater than minimum students.'}
+            )
 
     def __str__(self):
         return self.subject_name
