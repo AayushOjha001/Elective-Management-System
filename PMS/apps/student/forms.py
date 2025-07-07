@@ -5,6 +5,7 @@ from django import forms
 from apps.authuser.models import StudentProxyModel
 from apps.student.models import ElectivePriority
 from apps.utils import get_student_queryset, get_subjects, get_nth_object, get_object_index
+from apps.course.models import ElectiveSubject, ElectiveSession
 
 
 class PriorityForm(forms.ModelForm):
@@ -101,3 +102,63 @@ class PriorityFormForFormset(forms.Form):
             priorities = ' '.join(priorities_list)
         ElectivePriority.objects.filter(student=student,
                                         session=self.semester).update(priority_text=priorities)
+
+
+class FlexibleElectiveSelectionForm(forms.Form):
+    """Form for master's students to select flexible electives"""
+    target_semester = forms.ModelChoiceField(
+        queryset=ElectiveSession.objects.all(),
+        label="Target Semester",
+        help_text="Choose which semester you want to take these subjects"
+    )
+    
+    def __init__(self, *args, **kwargs):
+        student = kwargs.pop('student', None)
+        super().__init__(*args, **kwargs)
+        
+        if student:
+            # Get available subjects for this student's stream
+            available_subjects = ElectiveSubject.objects.filter(stream=student.stream)
+            
+            # Create dynamic fields for each subject
+            for subject in available_subjects:
+                field_name = f'subject_{subject.id}'
+                self.fields[field_name] = forms.BooleanField(
+                    required=False,
+                    label=subject.subject_name,
+                    help_text=f"Available in {subject.elective_for}"
+                )
+                
+                # Set initial value if student has already selected this subject
+                if student:
+                    existing_priority = ElectivePriority.objects.filter(
+                        student=student,
+                        subject=subject,
+                        is_flexible_selection=True
+                    ).first()
+                    if existing_priority:
+                        self.fields[field_name].initial = True
+
+
+class ElectivePriorityForm(forms.ModelForm):
+    """Form for setting priority for flexible elective selection"""
+    
+    class Meta:
+        model = ElectivePriority
+        fields = ['subject', 'priority', 'session', 'desired_number_of_subjects']
+        widgets = {
+            'priority': forms.NumberInput(attrs={'min': 1, 'max': 10}),
+            'desired_number_of_subjects': forms.NumberInput(attrs={'min': 1, 'max': 5})
+        }
+    
+    def __init__(self, *args, **kwargs):
+        student = kwargs.pop('student', None)
+        super().__init__(*args, **kwargs)
+        
+        if student:
+            # Filter subjects to only show those available for this student's stream
+            self.fields['subject'].queryset = ElectiveSubject.objects.filter(stream=student.stream)
+            
+            # Set default values for flexible selection
+            self.fields['is_flexible_selection'].initial = True
+            self.fields['session'].initial = student.current_semester

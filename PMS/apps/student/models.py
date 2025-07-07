@@ -16,6 +16,7 @@ class ElectivePriority(models.Model):
     priority_text = models.CharField(max_length=100, blank=True, null=True)
 
     desired_number_of_subjects = models.IntegerField(default=2)
+    is_flexible_selection = models.BooleanField(default=False, help_text="Allow flexible elective selection across semesters")
 
     class Meta:
         unique_together = ('subject', 'session', 'priority', 'student')
@@ -28,3 +29,38 @@ class ElectivePriority(models.Model):
                                            , self.priority)
         except:
             return ''
+
+
+class CompletedElective(models.Model):
+    """Model to track completed elective subjects for master's students"""
+    student = models.ForeignKey(StudentProxyModel, on_delete=models.CASCADE)
+    subject = models.ForeignKey(ElectiveSubject, on_delete=models.CASCADE)
+    semester_completed = models.ForeignKey(ElectiveSession, on_delete=models.CASCADE)
+    completion_date = models.DateField(auto_now_add=True)
+    grade = models.CharField(max_length=5, blank=True, null=True, help_text="Grade received (optional)")
+    
+    class Meta:
+        unique_together = ('student', 'subject')
+        verbose_name = 'Completed Elective'
+        verbose_name_plural = 'Completed Electives'
+    
+    def __str__(self):
+        return f"{self.student.name} - {self.subject.subject_name} ({self.semester_completed})"
+
+
+class ElectiveSelection(models.Model):
+    """Model to track which subjects a student wants to take in a specific semester"""
+    student = models.ForeignKey(StudentProxyModel, on_delete=models.CASCADE)
+    subject = models.ForeignKey(ElectiveSubject, on_delete=models.CASCADE)
+    target_semester = models.ForeignKey(ElectiveSession, on_delete=models.CASCADE)
+    priority = models.IntegerField(default=1)
+    is_selected = models.BooleanField(default=True, help_text="Whether student wants to take this subject")
+    
+    class Meta:
+        unique_together = ('student', 'subject', 'target_semester')
+        verbose_name = 'Elective Selection'
+        verbose_name_plural = 'Elective Selections'
+    
+    def __str__(self):
+        status = "Selected" if self.is_selected else "Not Selected"
+        return f"{self.student.name} - {self.subject.subject_name} ({status})"

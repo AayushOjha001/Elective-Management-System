@@ -2,9 +2,9 @@ import pandas as pd
 from django.shortcuts import get_object_or_404
 
 from apps.authuser.models import StudentProxyModel
-from apps.course.models import ElectiveSubject
+from apps.course.models import ElectiveSubject, ElectiveRequirement, StudentElectiveProgress
 from apps.one_subject_algorithm import OneSubjectAlgorithm
-from apps.student.models import ElectivePriority
+from apps.student.models import ElectivePriority, CompletedElective, ElectiveSelection
 from apps.two_subject_algorithm import TwoSubjectAlgorithm
 
 
@@ -100,6 +100,128 @@ def get_normalized_result_from_dataframe(result_df):
         normalized_data_list.append(normalized_data)
     print(normalized_data_list)
     return normalized_data_list
+
+
+# New functions for flexible elective system
+
+def get_or_create_elective_requirement(stream, level):
+    """Get or create elective requirement for a stream and level"""
+    requirement, created = ElectiveRequirement.objects.get_or_create(
+        stream=stream,
+        level=level,
+        defaults={
+            'total_electives_required': 6,
+            'min_electives_per_semester': 1,
+            'max_electives_per_semester': 3
+        }
+    )
+    return requirement
+
+
+def get_or_create_student_progress(student):
+    """Get or create student elective progress"""
+    if not hasattr(student, 'elective_progress'):
+        requirement = get_or_create_elective_requirement(student.stream, student.level)
+        progress, created = StudentElectiveProgress.objects.get_or_create(
+            student=student,
+            defaults={'requirement': requirement}
+        )
+        return progress
+    return student.elective_progress
+
+
+def get_available_electives_for_student(student, target_semester=None):
+    """Get available elective subjects for a student"""
+    if target_semester:
+        subjects = ElectiveSubject.objects.filter(elective_for=target_semester, stream=student.stream)
+    else:
+        subjects = ElectiveSubject.objects.filter(stream=student.stream)
+    
+    # Exclude already completed subjects
+    completed_subjects = CompletedElective.objects.filter(student=student).values_list('subject', flat=True)
+    subjects = subjects.exclude(id__in=completed_subjects)
+    
+    return subjects
+
+
+def get_student_elective_summary(student):
+    """Get comprehensive elective summary for a student"""
+    progress = get_or_create_student_progress(student)
+    
+    # Get all available subjects across all semesters
+    all_subjects = ElectiveSubject.objects.filter(stream=student.stream)
+    
+    # Get completed subjects
+    completed_subjects = CompletedElective.objects.filter(student=student)
+    
+    # Get selected subjects (not yet completed)
+    selected_subjects = ElectiveSelection.objects.filter(
+        student=student, 
+        is_selected=True
+    ).exclude(subject__in=completed_subjects.values_list('subject', flat=True))
+    
+    # Get remaining subjects (not selected or completed)
+    completed_subject_ids = completed_subjects.values_list('subject', flat=True)
+    selected_subject_ids = selected_subjects.values_list('subject', flat=True)
+    remaining_subjects = all_subjects.exclude(id__in=list(completed_subject_ids) + list(selected_subject_ids))
+    
+    return {
+        'progress': progress,
+        'completed_subjects': completed_subjects,
+        'selected_subjects': selected_subjects,
+        'remaining_subjects': remaining_subjects,
+        'total_required': progress.requirement.total_electives_required,
+        'completed_count': progress.completed_electives,
+        'remaining_required': progress.remaining_electives,
+        'completion_percentage': progress.completion_percentage
+    }
+
+
+def check_flexible_elective_completion(student, semester):
+    """Check if student has completed required electives for flexible mode"""
+    progress = get_or_create_student_progress(student)
+    
+    # Get subjects selected for this semester
+    selected_for_semester = ElectiveSelection.objects.filter(
+        student=student,
+        target_semester=semester,
+        is_selected=True
+    )
+    
+    # Check if student meets minimum requirements
+    min_required = progress.requirement.min_electives_per_semester
+    max_allowed = progress.requirement.max_electives_per_semester
+    
+    selected_count = selected_for_semester.count()
+    
+    if selected_count < min_required:
+        return False, f"Student needs at least {min_required} elective(s) for this semester"
+    elif selected_count > max_allowed:
+        return False, f"Student cannot take more than {max_allowed} elective(s) for this semester"
+    
+    return True, "Valid selection"
+
+
+def update_student_elective_progress(student, completed_subject, semester, grade=None):
+    """Update student's elective progress when they complete a subject"""
+    progress = get_or_create_student_progress(student)
+    
+    # Create completed elective record
+    completed_elective, created = CompletedElective.objects.get_or_create(
+        student=student,
+        subject=completed_subject,
+        defaults={
+            'semester_completed': semester,
+            'grade': grade
+        }
+    )
+    
+    if created:
+        # Update progress
+        progress.completed_electives += 1
+        progress.save()
+    
+    return completed_elective
 
 
 def get_student_queryset(batch, stream):

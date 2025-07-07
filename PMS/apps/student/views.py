@@ -1,10 +1,14 @@
 from django.template.response import TemplateResponse
 import pandas as pd
+from django.contrib import messages
+from django.shortcuts import redirect
+from django.urls import reverse
 from apps.authuser.models import StudentProxyModel
 from apps.course.forms import PriorityEntryDetailFormset
-from apps.course.models import ElectiveSubject
+from apps.course.models import ElectiveSubject, ElectiveSession
 from apps.student.formsets import PriorityFormset
 from apps.system.views import get_admin_context
+from apps.utils import get_student_elective_summary, get_available_electives_for_student, check_flexible_elective_completion, update_student_elective_progress
 
 
 def enter_priority_in_bulk(request, *args, **kwargs):
@@ -73,6 +77,8 @@ def enter_priority_in_bulk(request, *args, **kwargs):
         'admin/priority/enter_priority_in_bulk.html',
         context
     )
+
+
 def extract_student_pref(file, semester, stream, batch):
     """
     Extract student preferences from Excel file
@@ -226,3 +232,97 @@ def extract_student_pref(file, semester, stream, batch):
             'success': False,
             'error': f'Failed to read Excel file: {str(e)}'
         }
+
+
+def flexible_elective_selection(request, *args, **kwargs):
+    """View for students to manage their flexible elective selections"""
+    context = get_admin_context()
+    
+    if not request.user.is_authenticated or request.user.user_type != 'Student':
+        messages.error(request, 'Access denied. Students only.')
+        return redirect('admin:index')
+    
+    student = request.user
+    context['student'] = student
+    
+    # Get student's elective summary
+    summary = get_student_elective_summary(student)
+    context.update(summary)
+    
+    if request.method == 'POST':
+        if '_update_selections' in request.POST:
+            # Handle elective selection updates
+            semester_id = request.POST.get('target_semester')
+            subject_ids = request.POST.getlist('selected_subjects')
+            
+            if semester_id:
+                target_semester = ElectiveSession.objects.get(id=semester_id)
+                
+                # Clear existing selections for this semester
+                from apps.student.models import ElectiveSelection
+                ElectiveSelection.objects.filter(
+                    student=student,
+                    target_semester=target_semester
+                ).delete()
+                
+                # Create new selections
+                for subject_id in subject_ids:
+                    subject = ElectiveSubject.objects.get(id=subject_id)
+                    ElectiveSelection.objects.create(
+                        student=student,
+                        subject=subject,
+                        target_semester=target_semester,
+                        is_selected=True
+                    )
+                
+                # Validate selections
+                is_valid, message = check_flexible_elective_completion(student, target_semester)
+                if is_valid:
+                    messages.success(request, f'Elective selections updated for {target_semester}')
+                else:
+                    messages.warning(request, message)
+        
+        elif '_mark_completed' in request.POST:
+            # Handle marking subjects as completed
+            subject_id = request.POST.get('completed_subject')
+            semester_id = request.POST.get('completion_semester')
+            grade = request.POST.get('grade', '')
+            
+            if subject_id and semester_id:
+                subject = ElectiveSubject.objects.get(id=subject_id)
+                semester = ElectiveSession.objects.get(id=semester_id)
+                
+                update_student_elective_progress(student, subject, semester, grade)
+                messages.success(request, f'{subject.subject_name} marked as completed')
+    
+    # Get available semesters for selection
+    available_semesters = ElectiveSession.objects.filter(level=student.level).order_by('semester')
+    context['available_semesters'] = available_semesters
+    
+    return TemplateResponse(
+        request,
+        'admin/student/flexible_elective_selection.html',
+        context
+    )
+
+
+def student_elective_progress(request, *args, **kwargs):
+    """View for students to view their elective progress"""
+    context = get_admin_context()
+    
+    if not request.user.is_authenticated or request.user.user_type != 'Student':
+        messages.error(request, 'Access denied. Students only.')
+        return redirect('admin:index')
+    
+    student = request.user
+    context['student'] = student
+    
+    # Get student's elective summary
+    summary = get_student_elective_summary(student)
+    context.update(summary)
+    
+    return TemplateResponse(
+        request,
+        'admin/student/elective_progress.html',
+        context
+    )

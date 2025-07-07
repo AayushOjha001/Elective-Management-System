@@ -33,7 +33,7 @@ class PriorityInline(admin.TabularInline):
             return 0
         current_session = obj.current_semester
         stream = obj.stream
-        subjects_count = ElectiveSubject.objects.filter(elective_for=current_session, stream=stream).count()
+        subjects_count = ElectiveSubject.objects.filter(elective_for=current_session, stream=obj.stream).count()
         return subjects_count
 
     def get_formset(self, request, obj=None, **kwargs):
@@ -46,15 +46,16 @@ class StudentAdmin(UserAdmin):
     add_form = NewStudentCreateForm
     form = StudentChangeForm
     inlines = (PriorityInline,)
-    actions = ['change_semester', ]
+    actions = ['change_semester', 'enable_flexible_elective_mode', 'disable_flexible_elective_mode']
     action_form = StudentActionForm
     search_fields = ('name', 'username', 'email', 'roll_number')
-    list_display = ('name', 'roll_number', 'email', 'batch', 'stream', 'level')
-    list_filter = ('batch', 'level', 'stream')
+    list_display = ('name', 'roll_number', 'email', 'batch', 'stream', 'level', 'is_flexible_elective_mode')
+    list_filter = ('batch', 'level', 'stream', 'is_flexible_elective_mode')
     change_list_template = 'admin/authuser/authuser_student_change_list.html'
     fieldsets = (
         (None, {'fields': ('username', 'password')}),
         (_('Personal info'), {'fields': ('name', 'email', 'batch', 'stream', 'roll_number', 'current_semester')}),
+        (_('Elective Settings'), {'fields': ('is_flexible_elective_mode',)}),
     )
     add_fieldsets = (
         (None, {
@@ -84,6 +85,20 @@ class StudentAdmin(UserAdmin):
             messages.error(request, 'No note selected.')
 
     change_semester.short_description = "Change Semester"
+
+    def enable_flexible_elective_mode(self, request, queryset):
+        """Enable flexible elective mode for selected students"""
+        updated_count = queryset.update(is_flexible_elective_mode=True)
+        messages.success(request, f'Enabled flexible elective mode for {updated_count} students')
+
+    enable_flexible_elective_mode.short_description = "Enable Flexible Elective Mode"
+
+    def disable_flexible_elective_mode(self, request, queryset):
+        """Disable flexible elective mode for selected students"""
+        updated_count = queryset.update(is_flexible_elective_mode=False)
+        messages.success(request, f'Disabled flexible elective mode for {updated_count} students')
+
+    disable_flexible_elective_mode.short_description = "Disable Flexible Elective Mode"
 
     def get_urls(self, *args, **kwargs):
         urls = super().get_urls(*args, **kwargs)

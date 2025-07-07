@@ -6,7 +6,7 @@ from django.utils.html import format_html
 
 from apps.authuser.models import StudentProxyModel
 from apps.course.forms import StreamForm
-from apps.course.models import ElectiveSubject, Stream, Batch, ElectiveSession, AcademicLevel
+from apps.course.models import ElectiveSubject, Stream, Batch, ElectiveSession, AcademicLevel, ElectiveRequirement, StudentElectiveProgress
 from apps.utils import get_suitable_algorithm_class, normalize_result
 
 
@@ -85,3 +85,28 @@ admin.site.register(Stream, StreamAdmin)
 admin.site.register(Batch, BatchAdmin)
 admin.site.register(AcademicLevel, LevelAdmin)
 admin.site.register(ElectiveSession, ElectiveSessionAdmin)
+
+
+class ElectiveRequirementAdmin(admin.ModelAdmin):
+    list_display = ('stream', 'level', 'total_electives_required', 'min_electives_per_semester', 'max_electives_per_semester')
+    list_filter = ('stream', 'level')
+    search_fields = ('stream__stream_name', 'level__name')
+
+
+class StudentElectiveProgressAdmin(admin.ModelAdmin):
+    list_display = ('student', 'requirement', 'completed_electives', 'remaining_electives', 'completion_percentage')
+    list_filter = ('requirement__stream', 'requirement__level', 'target_completion_semester')
+    search_fields = ('student__name', 'student__roll_number')
+    readonly_fields = ('remaining_electives', 'completion_percentage')
+    
+    def remaining_electives(self, obj):
+        return obj.remaining_electives
+    remaining_electives.short_description = 'Remaining Electives'
+    
+    def completion_percentage(self, obj):
+        return f"{obj.completion_percentage:.1f}%"
+    completion_percentage.short_description = 'Completion %'
+
+
+admin.site.register(ElectiveRequirement, ElectiveRequirementAdmin)
+admin.site.register(StudentElectiveProgress, StudentElectiveProgressAdmin)

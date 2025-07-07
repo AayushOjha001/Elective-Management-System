@@ -23,6 +23,7 @@ class User(AbstractUser):
     batch = models.ForeignKey(Batch, on_delete=models.CASCADE, default=1)
     level = models.ForeignKey(AcademicLevel, on_delete=models.CASCADE, default=1)
     current_semester = models.ForeignKey(ElectiveSession, on_delete=models.DO_NOTHING, null=True)
+    is_flexible_elective_mode = models.BooleanField(default=False, help_text="Enable flexible elective selection across semesters")
 
     def get_full_name(self):
         return self.name
