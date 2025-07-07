@@ -159,6 +159,20 @@ class ElectivePriorityForm(forms.ModelForm):
             # Filter subjects to only show those available for this student's stream
             self.fields['subject'].queryset = ElectiveSubject.objects.filter(stream=student.stream)
             
-            # Set default values for flexible selection
-            self.fields['is_flexible_selection'].initial = True
-            self.fields['session'].initial = student.current_semester
+            # Set default values based on student level
+            if student.level.name.lower() == 'masters':
+                # Only show flexible selection for master's students
+                self.fields['is_flexible_selection'] = forms.BooleanField(
+                    required=False,
+                    initial=True,
+                    help_text="Allow flexible elective selection across semesters"
+                )
+                self.fields['session'].initial = student.current_semester
+            else:
+                # Bachelor's students: no flexible selection, fixed to current semester
+                self.fields['is_flexible_selection'] = forms.BooleanField(
+                    required=False,
+                    initial=False,
+                    widget=forms.HiddenInput()  # Hide the field
+                )
+                self.fields['session'].initial = student.current_semester

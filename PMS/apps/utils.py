@@ -179,6 +179,10 @@ def get_student_elective_summary(student):
 
 def check_flexible_elective_completion(student, semester):
     """Check if student has completed required electives for flexible mode"""
+    # Only apply flexible rules to master's students
+    if student.level.name.lower() != 'masters':
+        return True, "Bachelor's students follow fixed semester rules"
+    
     progress = get_or_create_student_progress(student)
     
     # Get subjects selected for this semester

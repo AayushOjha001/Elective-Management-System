@@ -29,6 +29,23 @@ class ElectivePriority(models.Model):
                                            , self.priority)
         except:
             return ''
+    
+    @property
+    def is_masters_student(self):
+        """Check if the student is a master's student"""
+        if self.student:
+            return self.student.level.name.lower() == 'masters'
+        return False
+    
+    def save(self, *args, **kwargs):
+        """Override save to set flexible selection based on student level"""
+        if self.student:
+            # Only allow flexible selection for master's students
+            if self.student.level.name.lower() == 'masters':
+                self.is_flexible_selection = True
+            else:
+                self.is_flexible_selection = False
+        super().save(*args, **kwargs)
 
 
 class CompletedElective(models.Model):
@@ -64,3 +81,18 @@ class ElectiveSelection(models.Model):
     def __str__(self):
         status = "Selected" if self.is_selected else "Not Selected"
         return f"{self.student.name} - {self.subject.subject_name} ({status})"
+    
+    @property
+    def is_masters_student(self):
+        """Check if the student is a master's student"""
+        if self.student:
+            return self.student.level.name.lower() == 'masters'
+        return False
+    
+    def save(self, *args, **kwargs):
+        """Override save to set is_selected based on student level"""
+        if self.student:
+            # Bachelor's students must always have is_selected=True (no choice)
+            if self.student.level.name.lower() != 'masters':
+                self.is_selected = True
+        super().save(*args, **kwargs)

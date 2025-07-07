@@ -243,6 +243,12 @@ def flexible_elective_selection(request, *args, **kwargs):
         return redirect('admin:index')
     
     student = request.user
+    
+    # Only allow master's students to access flexible elective selection
+    if student.level.name.lower() != 'masters':
+        messages.error(request, 'Flexible elective selection is only available for master\'s students.')
+        return redirect('admin:index')
+    
     context['student'] = student
     
     # Get student's elective summary
