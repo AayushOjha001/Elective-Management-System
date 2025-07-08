@@ -1,0 +1,22 @@
+# General Python ignores
+__pycache__/
+*.py[cod]
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+.env/
+venv/
+
+# SQLite databases
+*.sqlite3
+PMS/pms_db.sqlite3
+
+# Generated Excel/CSV outputs (keep templates via explicit include later if needed)
+PMS/resources/xlxsss/*.xlsx
+PMS/resources/csvs/*.csv
+
+# OS files
+.DS_Store
+Thumbs.db
