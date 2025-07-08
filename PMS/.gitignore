@@ -1,2 +1,33 @@
+# Virtual Environments
+/venv/
 /myvenv/
-.venv
+/env/
+
+# Database files
+*.sqlite3
+pms_db.sqlite3
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Django static and media files
+/staticfiles/
+/media/
+
+# IDE/Editor specific files
+.vscode/
+.idea/
+
+# Log files
+*.log
+
+# Secrets / Credentials
+mycredentials.txt
+.env
+
+# OS-specific files
+.DS_Store
+Thumbs.db

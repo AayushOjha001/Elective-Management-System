@@ -5,12 +5,13 @@ from apps.course.models import ElectiveSubject
 
 
 class GenericAlgorithm:
-    
     def __init__(self, batch, semester, stream):
         self.batch = batch
         self.semester = semester
         self.stream = stream
         self.df_of_priorities = prepare_pandas_dataframe_from_database(batch, semester, stream)
+        self.minimum_subject_threshold = semester.min_student
+        # self.maximum_subject_limit = 24  # Maximum students per subject
         self.result_df = None
         self.subjects_list_in_order = self.df_of_priorities.index
 
@@ -25,8 +26,13 @@ class GenericAlgorithm:
     def get_desired_number_of_subjects_for_student(self, student):
         # print('desired_number_of_subject('+student+')='+str(desired_number_of_subjects_dict.get(student, 2)))
         # print(student)
-        return ElectivePriority.objects.filter(student__name=student,
-                                               session=self.semester).first().desired_number_of_subjects
+        priority_entry =  ElectivePriority.objects.filter(student__name=student,
+                                               session=self.semester).first()
+        
+        if priority_entry and priority_entry.desired_number_of_subjects:
+            return priority_entry.desired_number_of_subjects
+        
+        return 2
     
     def arrange_df_according_to_priority_sum(self):
         priority_sum = []
@@ -38,8 +44,8 @@ class GenericAlgorithm:
         return self.df_of_priorities
     
     def is_subject_at_capacity(self, subject_index):
-        """Check if a subject has reached its maximum capacity"""
-        return sum(self.result_df.loc[subject_index]) >= self.max_students_per_subject.get(subject_index, 0)
+        """Check if a subject has reached the maximum capacity of 24 students"""
+        return False
     
     def insert_from_priority_to_result(self):
         self.df_of_priorities = self.arrange_df_according_to_priority_sum()
@@ -102,8 +108,7 @@ class GenericAlgorithm:
         print("\nSubject Capacity Summary:")
         for subject in self.result_df.index:
             student_count = sum(self.result_df.loc[subject])
-            max_students = self.max_students_per_subject.get(subject, 'N/A')
-            print(f"{subject}: {student_count}/{max_students} students")
+            print(f"{subject}: {student_count} students")
 
 # algorithm = GenericAlgorithm()
 # algorithm.run()

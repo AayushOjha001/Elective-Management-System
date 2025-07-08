@@ -15,7 +15,7 @@ class ElectivePriority(models.Model):
     session = models.ForeignKey(ElectiveSession, verbose_name='Semester', on_delete=models.DO_NOTHING)
     priority_text = models.CharField(max_length=100, blank=True, null=True)
 
-    desired_number_of_subjects = models.IntegerField(default=2)
+    desired_number_of_subjects = models.IntegerField(null=True, blank=True)
 
     class Meta:
         unique_together = ('subject', 'session', 'priority', 'student')
