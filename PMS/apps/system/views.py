@@ -35,6 +35,11 @@ def display_report(request, *args, **kwargs):
             is_data_entry_complete = check_if_the_data_entry_is_complete(batch, stream, semester)
             context['has_data'] = True
             context['is_data_entry_ok'] = is_data_entry_complete
+
+            context['semester'] = semester
+            context['batch'] = batch
+            context['stream'] = stream
+
             if is_data_entry_complete:
                 prepare_pandas_dataframe_from_database(batch, semester, stream)
                 algo = GenericAlgorithm(batch, semester, stream)
