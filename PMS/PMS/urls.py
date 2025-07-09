@@ -20,12 +20,14 @@ from django.views.generic import RedirectView
 from apps.ajax_apis import get_faculty_according_to_level, get_semester_according_to_level
 from apps.student.views import enter_priority_in_bulk
 from apps.system.views import display_report
+from apps.course.views import download_allocation_result
 
 urlpatterns = [
     path('', RedirectView.as_view(url='login/')),
     path('login/', admin.site.urls),
     path('report/', display_report, name='display_result'),
     path('enter-priorities/', enter_priority_in_bulk, name='enter_priorities'),
+    path('download-allocation/<int:session_id>/', download_allocation_result, name='download_allocation_result'),
 ]
 
 urlpatterns += [

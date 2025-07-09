@@ -118,4 +118,13 @@ $("#id_level").click(function () {
 
 </script>
 
+{% if result and semester and semester.pk %}
+<div class="mb-4">
+    <!-- Add batch and stream parameters to the URL -->
+    <a href="{% url 'download_allocation_result' semester.pk %}?batch={{ batch.pk }}&stream={{ stream.pk }}" class="btn btn-success">
+        <i class="fas fa-file-excel"></i> Download Result as Excel
+    </a>
+</div>
+{% endif %}
+
 {% endblock %}
