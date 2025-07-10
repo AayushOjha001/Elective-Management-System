@@ -15,7 +15,9 @@ class PriorityForm(forms.ModelForm):
 
 class PriorityFormForFormset(forms.Form):
     student = forms.ModelChoiceField(queryset=StudentProxyModel.objects.all(), required=True)
-    desired_number_of_subjects = forms.IntegerField(required=True)
+    desired_number_of_subjects = forms.IntegerField(required=False,  
+        label="Desired Number of Subjects",
+        widget=forms.NumberInput(attrs={'class': 'form-control'}))
 
     def __init__(self, *args, **kwargs):
         self.priority_detail_form_data = kwargs.pop('priority_detail_form_data', None)

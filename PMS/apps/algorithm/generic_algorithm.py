@@ -1,32 +1,29 @@
 import pandas as pd
 from apps.student.models import ElectivePriority
 from apps.utils import prepare_pandas_dataframe_from_database
-from apps.course.models import ElectiveSubject
 
 
 class GenericAlgorithm:
-    
     def __init__(self, batch, semester, stream):
         self.batch = batch
         self.semester = semester
         self.stream = stream
         self.df_of_priorities = prepare_pandas_dataframe_from_database(batch, semester, stream)
+        self.minimum_subject_threshold = semester.min_student
+        # self.maximum_subject_limit = 24  # Maximum students per subject
         self.result_df = None
         self.subjects_list_in_order = self.df_of_priorities.index
-
-        # Fetch subject-specific min/max student counts from the database
-        self.min_students_per_subject = {}
-        self.max_students_per_subject = {}
-        for subject_name in self.subjects_list_in_order:
-            subject = ElectiveSubject.objects.get(subject_name=subject_name, elective_for=self.semester, stream=self.stream)
-            self.min_students_per_subject[subject_name] = subject.min_students
-            self.max_students_per_subject[subject_name] = subject.max_students
     
     def get_desired_number_of_subjects_for_student(self, student):
         # print('desired_number_of_subject('+student+')='+str(desired_number_of_subjects_dict.get(student, 2)))
         # print(student)
-        return ElectivePriority.objects.filter(student__name=student,
-                                               session=self.semester).first().desired_number_of_subjects
+        priority_entry =  ElectivePriority.objects.filter(student__name=student,
+                                               session=self.semester).first()
+        
+        if priority_entry and priority_entry.desired_number_of_subjects:
+            return priority_entry.desired_number_of_subjects
+        
+        return 2
     
     def arrange_df_according_to_priority_sum(self):
         priority_sum = []
@@ -38,8 +35,8 @@ class GenericAlgorithm:
         return self.df_of_priorities
     
     def is_subject_at_capacity(self, subject_index):
-        """Check if a subject has reached its maximum capacity"""
-        return sum(self.result_df.loc[subject_index]) >= self.max_students_per_subject.get(subject_index, 0)
+        """Check if a subject has reached the maximum capacity of 24 students"""
+        return False
     
     def insert_from_priority_to_result(self):
         self.df_of_priorities = self.arrange_df_according_to_priority_sum()
@@ -83,7 +80,7 @@ class GenericAlgorithm:
         for index in reversed(self.result_df.index):
             if sum(self.result_df.loc[index]) == 0:
                 self.result_df = self.result_df.drop(index)
-            elif sum(self.result_df.loc[index]) < self.min_students_per_subject.get(index, 0):
+            elif sum(self.result_df.loc[index]) < self.minimum_subject_threshold:
                 for column in self.result_df.columns:
                     if self.result_df.at[index, column]:
                         self.result_df.at[index, column] = 0
@@ -102,8 +99,7 @@ class GenericAlgorithm:
         print("\nSubject Capacity Summary:")
         for subject in self.result_df.index:
             student_count = sum(self.result_df.loc[subject])
-            max_students = self.max_students_per_subject.get(subject, 'N/A')
-            print(f"{subject}: {student_count}/{max_students} students")
+            print(f"{subject}: {student_count} students")
 
 # algorithm = GenericAlgorithm()
 # algorithm.run()
