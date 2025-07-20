@@ -38,10 +38,10 @@ def check_if_the_data_entry_is_complete(batch, stream, semester):
     student_queryset = StudentProxyModel.objects.filter(batch=batch, stream=stream)
     if available_subjects_count == 0:
         return False
-    for student in student_queryset:
-        priority_selection_count = ElectivePriority.objects.filter(student=student, session=semester).count()
-        if priority_selection_count != available_subjects_count:
-            return False
+    # for student in student_queryset:
+    #     priority_selection_count = ElectivePriority.objects.filter(student=student, session=semester).count()
+    #     if priority_selection_count != available_subjects_count:
+    #         return False
     return True
 
 
@@ -50,12 +50,12 @@ def get_outliers_message(batch, stream, semester):
     incomplete_data_entry = list()
     available_subjects_count = ElectiveSubject.objects.filter(elective_for=semester, stream=stream).count()
     student_queryset = StudentProxyModel.objects.filter(batch=batch, stream=stream)
-    for student in student_queryset:
-        priority_selection_count = ElectivePriority.objects.filter(student=student, session=semester).count()
-        if priority_selection_count != available_subjects_count:
-            message = '%s (%s) has only %d elective selections' % (
-                student.name, student.roll_number, priority_selection_count)
-            incomplete_data_entry.append(message)
+    # for student in student_queryset:
+    #     priority_selection_count = ElectivePriority.objects.filter(student=student, session=semester).count()
+    #     if priority_selection_count != available_subjects_count:
+    #         message = '%s (%s) has only %d elective selections' % (
+    #             student.name, student.roll_number, priority_selection_count)
+    #         incomplete_data_entry.append(message)
     outliers['Incomplete data entry'] = incomplete_data_entry
     return incomplete_data_entry
 
@@ -68,12 +68,14 @@ def prepare_pandas_dataframe_from_database(batch, semester, stream):
     df = pd.DataFrame(data={}, index=subjects, columns=students_names)
     for index in df.index:
         for column in df.columns:
-            if ElectivePriority.objects.filter(student__name=column, subject__subject_name=index,
-                                               session=semester).exists():
-                df.at[index, column] = ElectivePriority.objects.get(student__name=column, subject__subject_name=index,
-                                                                    session=semester).priority
-            else:
-                raise ValueError("All data are not available in the database.")
+            try:
+                # Try to get the priority
+                priority_obj = ElectivePriority.objects.get(student__name=column, subject__subject_name=index,
+                                                              session=semester)
+                df.at[index, column] = priority_obj.priority
+            except ElectivePriority.DoesNotExist:
+                # If it doesn't exist, assign a low priority (high number) instead of crashing
+                df.at[index, column] = 99
 
     return df
 

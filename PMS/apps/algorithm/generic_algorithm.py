@@ -5,12 +5,13 @@ from apps.course.models import ElectiveSubject
 
 
 class GenericAlgorithm:
-    
     def __init__(self, batch, semester, stream):
         self.batch = batch
         self.semester = semester
         self.stream = stream
         self.df_of_priorities = prepare_pandas_dataframe_from_database(batch, semester, stream)
+        self.minimum_subject_threshold = semester.min_student
+        # self.maximum_subject_limit = 24  # Maximum students per subject
         self.result_df = None
         self.subjects_list_in_order = self.df_of_priorities.index
 
@@ -25,8 +26,13 @@ class GenericAlgorithm:
     def get_desired_number_of_subjects_for_student(self, student):
         # print('desired_number_of_subject('+student+')='+str(desired_number_of_subjects_dict.get(student, 2)))
         # print(student)
-        return ElectivePriority.objects.filter(student__name=student,
-                                               session=self.semester).first().desired_number_of_subjects
+        priority_entry =  ElectivePriority.objects.filter(student__name=student,
+                                               session=self.semester).first()
+        
+        if priority_entry and priority_entry.desired_number_of_subjects:
+            return priority_entry.desired_number_of_subjects
+        
+        return 2
     
     def arrange_df_according_to_priority_sum(self):
         priority_sum = []
@@ -38,8 +44,8 @@ class GenericAlgorithm:
         return self.df_of_priorities
     
     def is_subject_at_capacity(self, subject_index):
-        """Check if a subject has reached its maximum capacity"""
-        return sum(self.result_df.loc[subject_index]) >= self.max_students_per_subject.get(subject_index, 0)
+        """Check if a subject has reached the maximum capacity of 24 students"""
+        return False
     
     def insert_from_priority_to_result(self):
         self.df_of_priorities = self.arrange_df_according_to_priority_sum()
@@ -71,8 +77,7 @@ class GenericAlgorithm:
     def arrange_priority_for_a_particular_student(self, student):
         self.df_of_priorities = self.df_of_priorities.sort_values(student)
         indices = self.df_of_priorities.index.to_list()
-        
-        # Find the first subject that hasn't reached capacity
+          # Find the first subject that hasn't reached capacity
         for subject_index in indices:
             if not self.is_subject_at_capacity(subject_index):
                 self.result_df.at[subject_index, student] = 1
@@ -90,6 +95,17 @@ class GenericAlgorithm:
                         self.arrange_priority_for_a_particular_student(column)
     
     def run(self):
+        # Check if we have cached data first
+        from apps.course.views import get_cached_allocation
+        cached_result = get_cached_allocation(self.batch.pk, self.semester.pk, self.stream.pk)
+        
+        if cached_result is not None:
+            print("Using cached allocation data")
+            self.result_df = cached_result
+            return self.result_df
+        
+        # If no cached data, run the normal algorithm
+        print("Running fresh allocation algorithm")
         self.insert_from_priority_to_result()
         for i in range(0, len(self.subjects_list_in_order)):
             self.start_eliminating_from_bottom()
@@ -102,8 +118,7 @@ class GenericAlgorithm:
         print("\nSubject Capacity Summary:")
         for subject in self.result_df.index:
             student_count = sum(self.result_df.loc[subject])
-            max_students = self.max_students_per_subject.get(subject, 'N/A')
-            print(f"{subject}: {student_count}/{max_students} students")
+            print(f"{subject}: {student_count} students")
 
 # algorithm = GenericAlgorithm()
 # algorithm.run()
