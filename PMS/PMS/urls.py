@@ -14,7 +14,7 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path
+from django.urls import path, include
 from django.views.generic import RedirectView
 
 from apps.ajax_apis import get_faculty_according_to_level, get_semester_according_to_level
@@ -28,6 +28,9 @@ urlpatterns = [
     path('report/', display_report, name='display_result'),
     path('enter-priorities/', enter_priority_in_bulk, name='enter_priorities'),
     path('download-allocation/<int:session_id>/', download_allocation_result, name='download_allocation_result'),
+    
+    # Include course URLs for Excel downloads
+    path('course/', include('apps.course.urls')),
 ]
 
 urlpatterns += [

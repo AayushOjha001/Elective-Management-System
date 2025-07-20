@@ -68,8 +68,7 @@ class GenericAlgorithm:
     def arrange_priority_for_a_particular_student(self, student):
         self.df_of_priorities = self.df_of_priorities.sort_values(student)
         indices = self.df_of_priorities.index.to_list()
-        
-        # Find the first subject that hasn't reached capacity
+          # Find the first subject that hasn't reached capacity
         for subject_index in indices:
             if not self.is_subject_at_capacity(subject_index):
                 self.result_df.at[subject_index, student] = 1
@@ -87,6 +86,17 @@ class GenericAlgorithm:
                         self.arrange_priority_for_a_particular_student(column)
     
     def run(self):
+        # Check if we have cached data first
+        from apps.course.views import get_cached_allocation
+        cached_result = get_cached_allocation(self.batch.pk, self.semester.pk, self.stream.pk)
+        
+        if cached_result is not None:
+            print("Using cached allocation data")
+            self.result_df = cached_result
+            return self.result_df
+        
+        # If no cached data, run the normal algorithm
+        print("Running fresh allocation algorithm")
         self.insert_from_priority_to_result()
         for i in range(0, len(self.subjects_list_in_order)):
             self.start_eliminating_from_bottom()
