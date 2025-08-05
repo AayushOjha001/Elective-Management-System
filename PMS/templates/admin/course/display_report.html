@@ -9,9 +9,7 @@
 
 {% block content %}
 {% if not is_download %}
-<form method="post" enctype="multipart/form-data">
-    {% csrf_token %}
-    {{form.as_p}}
+<form method="post" enctype="multipart/form-data">    {% csrf_token %}    {{form.as_p}}
     <button class="button" type="submit"> View priority result</button>
     <!--<button class="button" type="submit" name="_get_pdf"> Get PDF</button>-->
 </form>
@@ -111,45 +109,22 @@
         <th>Roll number</th>
         <th>Student name</th>
         <th class="edit-column" style="display: none;">Actions</th>
-    </tr>
-    {% for subject in result%}
-    <tr>
-        <td rowspan="{{subject.row_count}}" class="sub_name">
-            {{subject.subject_name}}
-        </td>
-
-        <td rowspan="{{subject.row_count}}" class="student-count" data-subject="{{subject.subject_name}}">
-            {{subject.student_count}}
-        </td>
+    </tr>    {% for subject in result %}
         {% if subject.student_count == 0 %}
-        <td>-</td>
-        <td>No students assigned</td>
-        <td class="edit-column" style="display: none;">-</td>
-        {% endif %}
-        {% for student in subject.students %}
-        {% if forloop.counter == 1 %}
-        <td>{{student.roll_number}}</td>
-        <td>{{student.name}}</td>
-        <td class="edit-column" style="display: none;">
-            <div class="edit-controls" style="display: none;">
-                <select class="subject-selector" data-student="{{student.name}}" data-current-subject="{{subject.subject_name}}">
-                    <option value="">Move to...</option>
-                    {% for other_subject in result %}
-                    {% if other_subject.subject_name != subject.subject_name %}
-                    <option value="{{other_subject.subject_name}}">{{other_subject.subject_name}}</option>
-                    {% endif %}
-                    {% endfor %}
-                </select>
-                <button class="move-btn" onclick="moveStudent('{{student.name}}', '{{subject.subject_name}}', this)">Move</button>
-                <button class="delete-btn" onclick="deleteStudent('{{student.name}}', '{{subject.subject_name}}', this)">Remove</button>
-            </div>
-        </td>
-        {% endif %}
-        {% endfor %}
-    </tr>
-    {% for student in subject.students %}
-    {% if forloop.counter != 1 %}
+            <tr>
+                <td rowspan="1" class="sub_name">{{subject.subject_name}}</td>
+                <td rowspan="1" class="student-count" data-subject="{{subject.subject_name}}">{{subject.student_count}}</td>
+                <td>-</td>
+                <td>No students assigned</td>
+                <td class="edit-column" style="display: none;">-</td>
+            </tr>
+        {% else %}
+            {% for student in subject.students %}
     <tr>
+        {% if forloop.first %}
+            <td rowspan="{{subject.student_count}}" class="sub_name">{{subject.subject_name}}</td>
+            <td rowspan="{{subject.student_count}}" class="student-count" data-subject="{{subject.subject_name}}">{{subject.student_count}}</td>
+        {% endif %}
         <td>{{student.roll_number}}</td>
         <td>{{student.name}}</td>
         <td class="edit-column" style="display: none;">
@@ -157,9 +132,9 @@
                 <select class="subject-selector" data-student="{{student.name}}" data-current-subject="{{subject.subject_name}}">
                     <option value="">Move to...</option>
                     {% for other_subject in result %}
-                    {% if other_subject.subject_name != subject.subject_name %}
-                    <option value="{{other_subject.subject_name}}">{{other_subject.subject_name}}</option>
-                    {% endif %}
+                        {% if other_subject.subject_name != subject.subject_name %}
+                            <option value="{{other_subject.subject_name}}">{{other_subject.subject_name}}</option>
+                        {% endif %}
                     {% endfor %}
                 </select>
                 <button class="move-btn" onclick="moveStudent('{{student.name}}', '{{subject.subject_name}}', this)">Move</button>
@@ -167,8 +142,8 @@
             </div>
         </td>
     </tr>
-    {% endif %}
-    {% endfor %}
+{% endfor %}
+        {% endif %}
     {% endfor %}
 </table>
 {% else %}

@@ -7,7 +7,7 @@ from django.utils.html import format_html
 from apps.authuser.models import StudentProxyModel
 from apps.course.forms import StreamForm
 from apps.course.models import ElectiveSubject, Stream, Batch, ElectiveSession, AcademicLevel
-from apps.utils import get_suitable_algorithm_class, normalize_result
+from apps.utils import normalize_result
 
 
 class StreamAdmin(admin.ModelAdmin):
@@ -18,6 +18,9 @@ class StreamAdmin(admin.ModelAdmin):
 class ElectiveSubjectAdmin(admin.ModelAdmin):
     list_display = ('subject_name', 'elective_for', 'stream')
     list_filter = ('elective_for', 'stream')
+    
+    class Media:
+        js = ('admin/js/elective_subject_form.js',)
 
 
 class BatchAdmin(admin.ModelAdmin):
@@ -44,7 +47,7 @@ class BatchAdmin(admin.ModelAdmin):
         batch = self.get_object(request=request, object_id=batch_id)
         context = self.admin_site.each_context(request)
         if request.method == 'GET':
-            form = StreamForm
+            form = StreamForm()
         else:
             form = StreamForm(request.POST)
             if form.is_valid():
@@ -55,13 +58,14 @@ class BatchAdmin(admin.ModelAdmin):
                                                                                                             flat=True)
                 student_queryset = StudentProxyModel.objects.filter(batch=batch, stream=stream)
 
-                AlgorithClass = get_suitable_algorithm_class(semester.subjects_provided)
-                algorithm = AlgorithClass(student_queryset, semester, list(subjects))
-                algorithm.run()
-                print(algorithm.get_result())
-                context['result'] = normalize_result(algorithm.get_result())
+                # Legacy algorithm usage - commented out since using GenericAlgorithm now
+                # AlgorithClass = get_suitable_algorithm_class(semester.subjects_provided)
+                # algorithm = AlgorithClass(student_queryset, semester, list(subjects))
+                # algorithm.run()
+                # print(algorithm.get_result())
+                # context['result'] = normalize_result(algorithm.get_result())
                 # print(normalize_result(algorithm.get_result()))
-                context['is_download'] = '_get_pdf' in request.POST
+                # context['is_download'] = '_get_pdf' in request.POST
         context['form'] = form
         # if '_get_pdf' in request.POST:
         #     return Render.render('admin/course/display_report.html', context)

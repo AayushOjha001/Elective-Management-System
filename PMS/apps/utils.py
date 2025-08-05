@@ -3,19 +3,18 @@ from django.shortcuts import get_object_or_404
 
 from apps.authuser.models import StudentProxyModel
 from apps.course.models import ElectiveSubject
-from apps.one_subject_algorithm import OneSubjectAlgorithm
 from apps.student.models import ElectivePriority
-from apps.two_subject_algorithm import TwoSubjectAlgorithm
 
 
-def get_suitable_algorithm_class(subject_count=1):
-    print(subject_count)
-    if subject_count == 1:
-        return OneSubjectAlgorithm
-    elif subject_count == 2:
-        return TwoSubjectAlgorithm
-    else:
-        raise NotImplementedError
+# Legacy function - commented out since OneSubjectAlgorithm and TwoSubjectAlgorithm are deprecated
+# def get_suitable_algorithm_class(subject_count=1):
+#     print(subject_count)  
+#     if subject_count == 1:
+#         return OneSubjectAlgorithm
+#     elif subject_count == 2:
+#         return TwoSubjectAlgorithm
+#     else:
+#         raise NotImplementedError
 
 
 def normalize_result(result):
@@ -61,46 +60,67 @@ def get_outliers_message(batch, stream, semester):
 
 
 def prepare_pandas_dataframe_from_database(batch, semester, stream):
-    students_names = list(StudentProxyModel.objects.filter(batch=batch, stream=stream).values_list('name', flat=True))
+    # Get only students who have at least one elective priority selection for this semester
+    students_with_priorities = ElectivePriority.objects.filter(
+        student__batch=batch, 
+        student__stream=stream, 
+        session=semester
+    ).values_list('student__name', flat=True).distinct()
+    
+    students_names = list(students_with_priorities)
     subjects = list(
         ElectiveSubject.objects.filter(elective_for=semester, stream=stream).values_list('subject_name', flat=True))
-
+    
+    # If no students have selected any electives, return empty DataFrame
+    if not students_names:
+        return pd.DataFrame()
+    
+    # Initialize DataFrame with NaN values
     df = pd.DataFrame(data={}, index=subjects, columns=students_names)
+    
+    # Only populate cells where students have actually made priority selections
     for index in df.index:
         for column in df.columns:
             try:
-                # Try to get the priority
-                priority_obj = ElectivePriority.objects.get(student__name=column, subject__subject_name=index,
-                                                              session=semester)
-                df.at[index, column] = priority_obj.priority
+                # Try to get the priority for this student-subject combination
+                # Use filter().first() to handle potential duplicate records
+                priority_obj = ElectivePriority.objects.filter(student__name=column, subject__subject_name=index,
+                                                              session=semester).first()
+                if priority_obj:
+                    df.at[index, column] = priority_obj.priority
+                else:
+                    # If student hasn't selected this subject, leave it as NaN
+                    df.at[index, column] = float('nan')
             except ElectivePriority.DoesNotExist:
-                # If it doesn't exist, assign a low priority (high number) instead of crashing
-                df.at[index, column] = 99
+                # If student hasn't selected this subject, leave it as NaN
+                df.at[index, column] = float('nan')
 
     return df
 
 
 def get_normalized_result_from_dataframe(result_df):
-    priority_sum = []
-    for i in range(0, len(result_df.index)):
-        priority_sum.append(sum(result_df.iloc[i]))
-    result_df['number_of_students'] = priority_sum
     normalized_data_list = []
     for subject in result_df.index:
         normalized_data = dict()
         normalized_data['subject_name'] = subject
         students = []
+        
         for student in result_df.columns:
-            if result_df.at[subject, student]:
+            # Skip non-student columns like 'number_of_students'
+            if student in ['number_of_students'] or student.startswith('Unnamed'):
+                continue
+            
+            if result_df.at[subject, student] == 1:  # Only students assigned (value = 1)
                 students.append(student)
-        print(students)
+        
         normalized_data['students'] = StudentProxyModel.objects.filter(name__in=students)
-        student_count = result_df.at[subject, 'number_of_students']
+        
+        # Calculate student count from actual assignments, not from a separate column
+        student_count = len(students)
         normalized_data['student_count'] = student_count
         normalized_data['student_count_1'] = student_count + 1
         normalized_data['row_count'] = 1 if student_count == 0 else student_count
         normalized_data_list.append(normalized_data)
-    print(normalized_data_list)
     return normalized_data_list
 
 
