@@ -24,7 +24,7 @@ SECRET_KEY = '7u$p-*j3mykg2@)8p#hwa639=tlgol-f0o-9omkb(75*zdxu4&'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['elective-management-system.onrender.com', '*.onrender.com', 'localhost', '127.0.0.1']
+ALLOWED_HOSTS = ['elective-management-system.onrender.com', '*.onrender.com', 'localhost', '127.0.0.1','https://elective-management-system.onrender.com']
 
 # Application definition
 
