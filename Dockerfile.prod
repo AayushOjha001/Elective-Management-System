@@ -51,14 +51,14 @@ RUN chmod +x start.sh
 # Create necessary directories
 RUN mkdir -p staticfiles media data logs
 
-# Create data directory that will be mounted
+# Create data directory that will be mounted and set permissions
 RUN mkdir -p /app/data && chmod 755 /app/data
 
 # Change ownership to django user
 RUN chown -R django:django /app
 
-# Switch to non-root user
-USER django
+# Don't switch to django user yet - let startup script handle permissions
+# USER django
 
 # Expose port
 EXPOSE 8000
