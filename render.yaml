@@ -14,7 +14,7 @@ services:
       - key: SECRET_KEY
         generateValue: true
       - key: DJANGO_SETTINGS_MODULE
-        value: "PMS.settings_production"
+        value: "PMS.settings_production_clean"
       - key: PYTHONUNBUFFERED
         value: "1"
       - key: PYTHONDONTWRITEBYTECODE
