@@ -28,6 +28,7 @@ RUN groupadd -r django && useradd -r -g django django
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
 ENV DJANGO_SETTINGS_MODULE=PMS.settings_production
+ENV DEBUG=0
 
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y \
