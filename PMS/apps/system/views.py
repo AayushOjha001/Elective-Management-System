@@ -33,6 +33,7 @@ def display_report(request, *args, **kwargs):
                                                                                                         flat=True)
             student_queryset = StudentProxyModel.objects.filter(batch=batch, stream=stream)
             is_data_entry_complete = check_if_the_data_entry_is_complete(batch, stream, semester)
+            
             context['has_data'] = True
             context['is_data_entry_ok'] = is_data_entry_complete
 
@@ -42,8 +43,10 @@ def display_report(request, *args, **kwargs):
 
             if is_data_entry_complete:
                 prepare_pandas_dataframe_from_database(batch, semester, stream)
+                
                 algo = GenericAlgorithm(batch, semester, stream)
                 result_as_df = algo.run()
+                
                 normalized_result = get_normalized_result_from_dataframe(result_as_df)
                 # AlgorithClass = get_suitable_algorithm_class(semester.subjects_provided)
                 # algorithm = AlgorithClass(student_queryset, semester, list(subjects))
