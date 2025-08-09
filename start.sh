@@ -17,6 +17,10 @@ echo "Current directory: $(pwd)"
 echo "Data directory exists: $(test -d /app/data && echo 'Yes' || echo 'No')"
 echo "Data directory permissions: $(ls -la /app/ | grep data || echo 'Not found')"
 
+# Run Django settings debug script
+echo "Running Django settings debug check..."
+python debug_settings.py || echo "Debug script failed"
+
 # Ensure data directory exists and has correct permissions
 mkdir -p /app/data
 chmod 755 /app/data
@@ -104,10 +108,24 @@ fi
 
 # Start the application
 echo "Starting Gunicorn server..."
+echo "Final environment check before starting server:"
+echo "DJANGO_SETTINGS_MODULE: $DJANGO_SETTINGS_MODULE"
+echo "DEBUG: $DEBUG"
+
 if [ "$(id -u)" = "0" ]; then
     # If running as root, switch to django user for the server
-    exec su django -c "DJANGO_SETTINGS_MODULE=PMS.settings_production gunicorn --bind 0.0.0.0:8000 --workers 3 --timeout 120 PMS.wsgi:application"
+    # Ensure environment variables are passed to the django user
+    exec su django -c "
+        export DJANGO_SETTINGS_MODULE=PMS.settings_production
+        export DEBUG=0
+        export PYTHONUNBUFFERED=1
+        echo 'Starting as django user with DJANGO_SETTINGS_MODULE: $DJANGO_SETTINGS_MODULE'
+        exec gunicorn --bind 0.0.0.0:8000 --workers 3 --timeout 120 PMS.wsgi:application
+    "
 else
     # If already running as django user, start normally
+    export DJANGO_SETTINGS_MODULE=PMS.settings_production
+    export DEBUG=0
+    echo "Starting as current user with DJANGO_SETTINGS_MODULE: $DJANGO_SETTINGS_MODULE"
     exec gunicorn --bind 0.0.0.0:8000 --workers 3 --timeout 120 PMS.wsgi:application
 fi
