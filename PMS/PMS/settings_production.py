@@ -20,18 +20,24 @@ SECURE_HSTS_SECONDS = 31536000
 SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 SECURE_HSTS_PRELOAD = True
 
-# Allowed hosts
-ALLOWED_HOSTS_ENV = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1,0.0.0.0')
-ALLOWED_HOSTS = ALLOWED_HOSTS_ENV.split(',')
+# Allowed hosts - VERY EXPLICIT
+ALLOWED_HOSTS = [
+    'elective-management-system.onrender.com',
+    '*.onrender.com', 
+    'localhost',
+    '127.0.0.1',
+    '0.0.0.0'
+]
 
-# Ensure the Render hostname is always included
-RENDER_HOSTNAME = 'elective-management-system.onrender.com'
-if RENDER_HOSTNAME not in ALLOWED_HOSTS:
-    ALLOWED_HOSTS.append(RENDER_HOSTNAME)
+# Add from environment variable too
+ALLOWED_HOSTS_ENV = os.environ.get('ALLOWED_HOSTS', '')
+if ALLOWED_HOSTS_ENV:
+    ALLOWED_HOSTS.extend(ALLOWED_HOSTS_ENV.split(','))
 
-# Also allow all .onrender.com subdomains
-if '*.onrender.com' not in ALLOWED_HOSTS:
-    ALLOWED_HOSTS.append('*.onrender.com')
+# Remove duplicates and empty strings
+ALLOWED_HOSTS = list(set([h.strip() for h in ALLOWED_HOSTS if h.strip()]))
+
+print(f"🔧 Production ALLOWED_HOSTS: {ALLOWED_HOSTS}")
 
 # Database configuration for production
 if 'DATABASE_URL' in os.environ:
