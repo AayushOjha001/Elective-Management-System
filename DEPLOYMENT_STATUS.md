@@ -11,7 +11,7 @@
 ### 🔧 Configuration Fixes
 - **ALLOWED_HOSTS**: ✅ Fixed for production (supports *.onrender.com)
 - **SECRET_KEY**: ✅ Environment variable with fallback
-- **DATABASE_URL**: ✅ PostgreSQL support with SQLite fallback
+- **DATABASE**: ✅ SQLite configured (PostgreSQL removed as requested)
 - **Static Files**: ✅ WhiteNoise configured for production
 - **Path Issues**: ✅ Fixed BASE_DIR path concatenation
 
@@ -44,10 +44,9 @@ Your Django Elective Management System is **100% ready** for Render.com deployme
 #### Option 2: Manual Steps
 1. Push code to GitHub
 2. Connect GitHub to Render.com
-3. Create PostgreSQL database
-4. Create web service with Docker
-5. Set environment variables
-6. Deploy!
+3. Create web service with Docker
+4. Set environment variables (using SQLite database)
+5. Deploy!
 
 ### What You Get After Deployment:
 
