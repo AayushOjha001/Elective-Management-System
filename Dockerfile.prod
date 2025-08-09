@@ -1,67 +1,68 @@
 # Multi-stage build for production
-FROM python:3.12-slim as builder
+FROM python:3.11-slim as builder
 
 # Set environment variables
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONUNBUFFERED 1
 
 # Install system dependencies
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        gcc \
-        pkg-config \
-        default-libmysqlclient-dev \
-        build-essential \
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install Python dependencies
-COPY PMS/requirements.txt /tmp/requirements.txt
-RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir -r /tmp/requirements.txt
+# Create and set work directory
+WORKDIR /app
+
+# Install Python dependencies
+COPY PMS/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Production stage
-FROM python:3.12-slim
+FROM python:3.11-slim
+
+# Create non-root user
+RUN groupadd -r django && useradd -r -g django django
 
 # Set environment variables
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-ENV DJANGO_SETTINGS_MODULE=PMS.settings
+ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONUNBUFFERED 1
+ENV DJANGO_SETTINGS_MODULE=PMS.settings_production
 
 # Install runtime dependencies
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        default-libmysqlclient-dev \
+RUN apt-get update && apt-get install -y \
+    libpq5 \
     && rm -rf /var/lib/apt/lists/*
-
-# Copy Python packages from builder stage
-COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
 
 # Set work directory
 WORKDIR /app
 
+# Copy Python dependencies from builder stage
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+
 # Copy project files
-COPY PMS/ /app/
+COPY PMS/ .
 
-# Create directories
-RUN mkdir -p /app/staticfiles /app/media /app/logs
+# Copy startup script
+COPY start.sh .
+RUN chmod +x start.sh
 
-# Create non-root user
-RUN adduser --disabled-password --gecos '' appuser \
-    && chown -R appuser:appuser /app
+# Create necessary directories
+RUN mkdir -p staticfiles media data logs
+
+# Change ownership to django user
+RUN chown -R django:django /app
 
 # Switch to non-root user
-USER appuser
-
-# Collect static files
-RUN python manage.py collectstatic --noinput
+USER django
 
 # Expose port
 EXPOSE 8000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/admin/login/', timeout=10)"
+    CMD python -c "import requests; requests.get('http://localhost:8000/admin/', timeout=10)"
 
-# Run with gunicorn for production
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "4", "--timeout", "120", "PMS.wsgi:application"]
+# Run startup script
+CMD ["./start.sh"]
