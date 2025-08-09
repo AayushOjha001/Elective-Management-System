@@ -23,17 +23,19 @@ SECURE_HSTS_PRELOAD = True
 # Allowed hosts
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1,0.0.0.0').split(',')
 
-# Database configuration for production (PostgreSQL)
+# Database configuration for production
 if 'DATABASE_URL' in os.environ:
     DATABASES = {
         'default': dj_database_url.parse(os.environ.get('DATABASE_URL'))
     }
 else:
-    # Fallback to SQLite for development
+    # Use SQLite with persistent disk volume
+    DATABASE_DIR = '/app/data' if os.path.exists('/app/data') else os.path.join(BASE_DIR, 'data')
+    os.makedirs(DATABASE_DIR, exist_ok=True)
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': os.path.join(BASE_DIR, 'data', 'db.sqlite3'),
+            'NAME': os.path.join(DATABASE_DIR, 'db.sqlite3'),
         }
     }
 
