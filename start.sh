@@ -26,48 +26,91 @@ fi
 echo "Running migrations..."
 python manage.py migrate --noinput --settings=PMS.settings_production_clean
 
-echo "Creating superuser..."
-python manage.py shell --settings=PMS.settings_production_clean << 'EOF' || true
-from django.contrib.auth import get_user_model
-User = get_user_model()
-if not User.objects.filter(username='admin').exists():
-    User.objects.create_superuser('admin', 'admin@example.com', 'adminpassword123')
-    print('Superuser created')
-EOF
-
-echo "Creating backup superuser..."
+echo "Attempting to create superuser safely..."
 python manage.py shell --settings=PMS.settings_production_clean << 'EOF'
-from django.contrib.auth import get_user_model
-User = get_user_model()
+try:
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    
+    print(f"Using User model: {User}")
+    print(f"User model fields: {[f.name for f in User._meta.get_fields()]}")
+    
+    # Check if any superuser exists
+    if User.objects.filter(is_superuser=True).exists():
+        print("✅ Superuser already exists")
+        superusers = User.objects.filter(is_superuser=True)
+        for user in superusers:
+            print(f"   - {user.username}")
+    else:
+        print("Creating superuser...")
+        
+        # Try to create with minimal required fields
+        try:
+            # Get required fields for the User model
+            required_fields = []
+            for field in User._meta.get_fields():
+                if hasattr(field, 'null') and not field.null and hasattr(field, 'default') and field.default == '':
+                    required_fields.append(field.name)
+            
+            print(f"Required fields: {required_fields}")
+            
+            # Create user with only essential fields
+            user_data = {
+                'username': 'admin',
+                'email': 'admin@example.com',
+                'is_superuser': True,
+                'is_staff': True,
+                'is_active': True,
+            }
+            
+            # Add any other required fields with default values
+            if hasattr(User, 'first_name'):
+                user_data['first_name'] = 'Admin'
+            if hasattr(User, 'last_name'):
+                user_data['last_name'] = 'User'
+            
+            user = User(**user_data)
+            user.set_password('adminpassword123')
+            user.save()
+            
+            print("✅ Superuser created successfully!")
+            print(f"   Username: {user.username}")
+            print("   Password: adminpassword123")
+            
+        except Exception as create_error:
+            print(f"❌ Error creating superuser: {create_error}")
+            print("Trying alternative method...")
+            
+            # Try using Django's built-in createsuperuser command
+            import subprocess
+            result = subprocess.run([
+                'python', 'manage.py', 'createsuperuser', 
+                '--username', 'admin',
+                '--email', 'admin@example.com',
+                '--noinput'
+            ], env={'DJANGO_SUPERUSER_PASSWORD': 'adminpassword123'}, 
+            capture_output=True, text=True)
+            
+            if result.returncode == 0:
+                print("✅ Superuser created via createsuperuser command!")
+            else:
+                print(f"❌ Failed to create superuser: {result.stderr}")
 
-# Create backup admin
-if not User.objects.filter(username='superadmin').exists():
-    backup_admin = User.objects.create_superuser('superadmin', 'superadmin@example.com', 'super123admin')
-    print("✅ Backup superuser created:")
-    print("   Username: superadmin")
-    print("   Password: super123admin")
+except Exception as e:
+    print(f"❌ Error in superuser creation script: {e}")
+    import traceback
+    traceback.print_exc()
 EOF
 
 echo "Collecting static files..."
 python manage.py collectstatic --noinput --settings=PMS.settings_production_clean
 
-# Test Django settings
-echo "Testing Django configuration..."
-python -c "
-import os
-os.environ['DJANGO_SETTINGS_MODULE'] = 'PMS.settings_production_clean'
-import django
-django.setup()
-from django.conf import settings
-print(f'✅ Using settings: {settings.SETTINGS_MODULE}')
-print(f'✅ DEBUG: {settings.DEBUG}')
-print(f'✅ ALLOWED_HOSTS: {settings.ALLOWED_HOSTS}')
-"
-
-echo "Starting Gunicorn with production WSGI..."
-# Use the dedicated production WSGI file
-if [ "$(id -u)" = "0" ]; then
-    exec su django -c "DJANGO_SETTINGS_MODULE=PMS.settings_production_clean gunicorn --bind 0.0.0.0:8000 --workers 3 --timeout 120 PMS.wsgi_production:application"
-else
-    exec gunicorn --bind 0.0.0.0:8000 --workers 3 --timeout 120 PMS.wsgi_production:application
-fi
+echo "Starting Gunicorn..."
+exec gunicorn PMS.wsgi:application \
+    --bind 0.0.0.0:8000 \
+    --workers 3 \
+    --timeout 120 \
+    --keep-alive 2 \
+    --max-requests 1000 \
+    --access-logfile - \
+    --error-logfile -
