@@ -3,7 +3,13 @@ import os
 import sys
 
 if __name__ == '__main__':
-    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'PMS.settings')
+    # Use production settings in production environment, fall back to development settings
+    if os.environ.get('DEBUG', '1') == '0':
+        # Production environment
+        os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'PMS.settings_production')
+    else:
+        # Development environment
+        os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'PMS.settings')
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:
