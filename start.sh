@@ -105,6 +105,41 @@ EOF
 echo "Collecting static files..."
 python manage.py collectstatic --noinput --settings=PMS.settings_production_clean
 
+echo "Creating required model instances for User model..."
+python manage.py shell --settings=PMS.settings_production_clean << 'EOF'
+try:
+    from apps.course.models import Batch, AcademicLevel, Stream
+    
+    # Create default Batch if it doesn't exist
+    if not Batch.objects.filter(id=1).exists():
+        batch = Batch.objects.create(id=1, name='Default Batch')
+        print(f"✅ Created default batch: {batch}")
+    else:
+        print("✅ Default batch already exists")
+    
+    # Create default AcademicLevel if it doesn't exist
+    if not AcademicLevel.objects.filter(id=1).exists():
+        level = AcademicLevel.objects.create(id=1, name='Default Level')
+        print(f"✅ Created default academic level: {level}")
+    else:
+        print("✅ Default academic level already exists")
+    
+    # Create default Stream if it doesn't exist
+    if not Stream.objects.filter(id=1).exists():
+        level = AcademicLevel.objects.get(id=1)
+        stream = Stream.objects.create(id=1, stream_name='Default Stream', level=level)
+        print(f"✅ Created default stream: {stream}")
+    else:
+        print("✅ Default stream already exists")
+        
+    print("✅ All required model instances are ready")
+    
+except Exception as e:
+    print(f"❌ Error creating required model instances: {e}")
+    import traceback
+    traceback.print_exc()
+EOF
+
 echo "Starting Gunicorn..."
 exec gunicorn PMS.wsgi:application \
     --bind 0.0.0.0:8000 \
