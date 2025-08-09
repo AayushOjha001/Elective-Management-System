@@ -35,6 +35,19 @@ if not User.objects.filter(username='admin').exists():
     print('Superuser created')
 EOF
 
+echo "Creating backup superuser..."
+python manage.py shell --settings=PMS.settings_production_clean << 'EOF'
+from django.contrib.auth import get_user_model
+User = get_user_model()
+
+# Create backup admin
+if not User.objects.filter(username='superadmin').exists():
+    backup_admin = User.objects.create_superuser('superadmin', 'superadmin@example.com', 'super123admin')
+    print("✅ Backup superuser created:")
+    print("   Username: superadmin")
+    print("   Password: super123admin")
+EOF
+
 echo "Collecting static files..."
 python manage.py collectstatic --noinput --settings=PMS.settings_production_clean
 
