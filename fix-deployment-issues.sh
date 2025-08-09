@@ -1,59 +1,42 @@
 #!/bin/bash
 
-echo "=== Fixing Elective Management System Deployment Issues ==="
+echo "=== Fixing Critical Deployment Issues ==="
 
 # Make sure we're in the right directory
 cd /home/abhiyan/Elective-Management-System-1
-
-# Check if git is initialized
-if [ ! -d .git ]; then
-    echo "Initializing git repository..."
-    git init
-fi
 
 # Add all files
 echo "Adding updated files to git..."
 git add .
 
 # Commit changes
-echo "Committing deployment fixes..."
-git commit -m "Fix deployment issues: Update database path and add debugging
+echo "Committing critical deployment fixes..."
+git commit -m "CRITICAL FIX: Resolve database permissions and user switching issues
 
-- Updated settings_production.py to use mounted disk volume for SQLite
-- Enhanced Dockerfile.prod with proper data directory permissions
-- Added debugging to startup script for troubleshooting
-- Fixed database path to use /app/data for persistent storage" || echo "No changes to commit"
+Key fixes:
+- Updated Dockerfile.prod to run as root initially for proper permissions
+- Enhanced startup script with intelligent user switching (root->django)
+- Added robust database directory creation with permission testing
+- Fixed all Django management commands to run as correct user
+- Added fallback database path handling
+- Improved error handling and debugging output
 
-# Check if render remote exists
-if ! git remote get-url render >/dev/null 2>&1; then
-    echo "Adding Render git remote..."
-    echo "Please run: git remote add render [your-render-git-url]"
-    echo "You can find your Render git URL in your Render dashboard under Settings > Build & Deploy"
-else
-    echo "Pushing to Render..."
-    git push render main --force
-    echo ""
-    echo "=== Deployment Status ==="
-    echo "✅ Code pushed to Render successfully"
-    echo "⏳ Render is now building and deploying your application"
-    echo ""
-    echo "Next steps:"
-    echo "1. Monitor the build logs in your Render dashboard"
-    echo "2. Check the application at: https://elective-management-system.onrender.com"
-    echo "3. If issues persist, check the runtime logs in Render dashboard"
-    echo ""
-    echo "Key fixes applied:"
-    echo "- Database now uses mounted disk volume (/app/data/db.sqlite3)"
-    echo "- Added proper directory permissions and debugging"
-    echo "- Ensured DJANGO_SETTINGS_MODULE uses production settings"
-fi
+This should resolve the 'unable to open database file' error." || echo "No changes to commit"
 
 echo ""
-echo "=== Manual Verification Steps ==="
-echo "1. Go to Render dashboard: https://dashboard.render.com"
-echo "2. Check Environment Variables:"
-echo "   - DJANGO_SETTINGS_MODULE should be: PMS.settings_production"
-echo "   - ALLOWED_HOSTS should be: *.onrender.com,localhost,127.0.0.1"
-echo "   - DEBUG should be: 0"
-echo "3. Check Build & Deploy logs for any errors"
-echo "4. Check Runtime logs once deployment completes"
+echo "=== Ready for Deployment ==="
+echo "✅ Database permission fixes applied"
+echo "✅ User switching logic improved"  
+echo "✅ Startup script enhanced"
+echo "✅ Error handling added"
+echo ""
+echo "To deploy to Render:"
+echo "1. Push to your git repository:"
+echo "   git push origin main"
+echo "2. Go to Render dashboard and trigger a manual deploy"
+echo "3. Monitor the build and runtime logs"
+echo ""
+echo "Expected fixes:"
+echo "- Database file will be created with correct permissions"
+echo "- Application will start as root, fix permissions, then run as django user"
+echo "- Better error messages for debugging"

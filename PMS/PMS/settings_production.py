@@ -31,7 +31,21 @@ if 'DATABASE_URL' in os.environ:
 else:
     # Use SQLite with persistent disk volume
     DATABASE_DIR = '/app/data' if os.path.exists('/app/data') else os.path.join(BASE_DIR, 'data')
-    os.makedirs(DATABASE_DIR, exist_ok=True)
+    try:
+        os.makedirs(DATABASE_DIR, exist_ok=True)
+        # Test write permissions
+        test_file = os.path.join(DATABASE_DIR, 'test_write.tmp')
+        with open(test_file, 'w') as f:
+            f.write('test')
+        os.remove(test_file)
+        print(f"✅ Database directory ready: {DATABASE_DIR}")
+    except Exception as e:
+        print(f"❌ Database directory error: {e}")
+        # Fallback to local directory
+        DATABASE_DIR = os.path.join(BASE_DIR, 'data')
+        os.makedirs(DATABASE_DIR, exist_ok=True)
+        print(f"Using fallback database directory: {DATABASE_DIR}")
+    
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
