@@ -3,6 +3,10 @@
 # Exit on any error
 set -e
 
+# FORCE correct Django settings
+export DJANGO_SETTINGS_MODULE=PMS.settings_production
+export DEBUG=0
+
 echo "Starting Elective Management System..."
 
 # Debug environment
@@ -34,7 +38,7 @@ if [ "$(id -u)" = "0" ]; then
     # Run as django user if we're root
     su django -c 'python -c "
 import os
-os.environ.setdefault(\"DJANGO_SETTINGS_MODULE\", \"PMS.settings_production\")
+os.environ[\"DJANGO_SETTINGS_MODULE\"] = \"PMS.settings_production\"
 import django
 django.setup()
 from django.conf import settings
@@ -43,12 +47,12 @@ print(f\"Database NAME: {settings.DATABASES[\"default\"][\"NAME\"]}\")
 print(f\"ALLOWED_HOSTS: {settings.ALLOWED_HOSTS}\")
 print(f\"DEBUG: {settings.DEBUG}\")
 "'
-    su django -c "python manage.py migrate --noinput"
+    su django -c "python manage.py migrate --noinput --settings=PMS.settings_production"
 else
     # Run directly if already django user
     python -c "
 import os
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'PMS.settings_production')
+os.environ['DJANGO_SETTINGS_MODULE'] = 'PMS.settings_production'
 import django
 django.setup()
 from django.conf import settings
@@ -57,13 +61,13 @@ print(f'Database NAME: {settings.DATABASES[\"default\"][\"NAME\"]}')
 print(f'ALLOWED_HOSTS: {settings.ALLOWED_HOSTS}')
 print(f'DEBUG: {settings.DEBUG}')
 "
-    python manage.py migrate --noinput
+    python manage.py migrate --noinput --settings=PMS.settings_production
 fi
 
 # Create superuser if it doesn't exist
 echo "Creating superuser if needed..."
 if [ "$(id -u)" = "0" ]; then
-    su django -c 'python manage.py shell << "EOF" || true
+    su django -c 'python manage.py shell --settings=PMS.settings_production << "EOF" || true
 try:
     from django.contrib.auth import get_user_model
     User = get_user_model()
@@ -76,7 +80,7 @@ except Exception as e:
     print(f"Superuser creation skipped: {e}")
 EOF'
 else
-    python manage.py shell << 'EOF' || true
+    python manage.py shell --settings=PMS.settings_production << 'EOF' || true
 try:
     from django.contrib.auth import get_user_model
     User = get_user_model()
@@ -93,16 +97,16 @@ fi
 # Collect static files
 echo "Collecting static files..."
 if [ "$(id -u)" = "0" ]; then
-    su django -c "python manage.py collectstatic --noinput"
+    su django -c "python manage.py collectstatic --noinput --settings=PMS.settings_production"
 else
-    python manage.py collectstatic --noinput
+    python manage.py collectstatic --noinput --settings=PMS.settings_production
 fi
 
 # Start the application
 echo "Starting Gunicorn server..."
 if [ "$(id -u)" = "0" ]; then
     # If running as root, switch to django user for the server
-    exec su django -c "gunicorn --bind 0.0.0.0:8000 --workers 3 --timeout 120 PMS.wsgi:application"
+    exec su django -c "DJANGO_SETTINGS_MODULE=PMS.settings_production gunicorn --bind 0.0.0.0:8000 --workers 3 --timeout 120 PMS.wsgi:application"
 else
     # If already running as django user, start normally
     exec gunicorn --bind 0.0.0.0:8000 --workers 3 --timeout 120 PMS.wsgi:application
