@@ -30,10 +30,47 @@ cd /app
 echo "Running migrations..."
 python manage.py migrate --noinput --settings=PMS.settings_production_clean
 
+echo "Creating required model instances for User model first..."
+python manage.py shell --settings=PMS.settings_production_clean << 'EOF'
+try:
+    from apps.course.models import Batch, AcademicLevel, Stream
+    
+    # Create default Batch if it doesn't exist
+    if not Batch.objects.filter(id=1).exists():
+        batch = Batch.objects.create(id=1, name='Default Batch')
+        print(f"✅ Created default batch: {batch}")
+    else:
+        print("✅ Default batch already exists")
+    
+    # Create default AcademicLevel if it doesn't exist
+    if not AcademicLevel.objects.filter(id=1).exists():
+        level = AcademicLevel.objects.create(id=1, name='Default Level')
+        print(f"✅ Created default academic level: {level}")
+    else:
+        print("✅ Default academic level already exists")
+    
+    # Create default Stream if it doesn't exist
+    if not Stream.objects.filter(id=1).exists():
+        level = AcademicLevel.objects.get(id=1)
+        stream = Stream.objects.create(id=1, stream_name='Default Stream', level=level)
+        print(f"✅ Created default stream: {stream}")
+    else:
+        print("✅ Default stream already exists")
+        
+    print("✅ All required model instances are ready")
+    
+except Exception as e:
+    print(f"❌ Error creating required model instances: {e}")
+    import traceback
+    traceback.print_exc()
+EOF
+
 echo "Attempting to create superuser safely..."
 python manage.py shell --settings=PMS.settings_production_clean << 'EOF'
 try:
     from django.contrib.auth import get_user_model
+    from apps.course.models import Batch, AcademicLevel, Stream
+    
     User = get_user_model()
     
     print(f"Using User model: {User}")
@@ -48,30 +85,29 @@ try:
     else:
         print("Creating superuser...")
         
-        # Try to create with minimal required fields
         try:
-            # Get required fields for the User model
-            required_fields = []
-            for field in User._meta.get_fields():
-                if hasattr(field, 'null') and not field.null and hasattr(field, 'default') and field.default == '':
-                    required_fields.append(field.name)
+            # Get the default required foreign key objects
+            default_batch = Batch.objects.get(id=1)
+            default_level = AcademicLevel.objects.get(id=1)
+            default_stream = Stream.objects.get(id=1)
             
-            print(f"Required fields: {required_fields}")
-            
-            # Create user with only essential fields
+            # Create superuser with all required fields
             user_data = {
                 'username': 'admin',
                 'email': 'admin@example.com',
+                'first_name': 'Admin',
+                'last_name': 'User',
+                'name': 'Admin User',
+                'roll_number': 'ADMIN001',
+                'user_type': 'admin',
+                'current_semester': 1,
                 'is_superuser': True,
                 'is_staff': True,
                 'is_active': True,
+                'batch': default_batch,
+                'level': default_level,
+                'stream': default_stream,
             }
-            
-            # Add any other required fields with default values
-            if hasattr(User, 'first_name'):
-                user_data['first_name'] = 'Admin'
-            if hasattr(User, 'last_name'):
-                user_data['last_name'] = 'User'
             
             user = User(**user_data)
             user.set_password('adminpassword123')
@@ -80,25 +116,56 @@ try:
             print("✅ Superuser created successfully!")
             print(f"   Username: {user.username}")
             print("   Password: adminpassword123")
+            print(f"   Email: {user.email}")
             
         except Exception as create_error:
             print(f"❌ Error creating superuser: {create_error}")
-            print("Trying alternative method...")
+            print("Trying custom management command...")
             
-            # Try using Django's built-in createsuperuser command
-            import subprocess
-            result = subprocess.run([
-                'python', 'manage.py', 'createsuperuser', 
-                '--username', 'admin',
-                '--email', 'admin@example.com',
-                '--noinput'
-            ], env={'DJANGO_SUPERUSER_PASSWORD': 'adminpassword123'}, 
-            capture_output=True, text=True)
+            from django.core.management import call_command
+            try:
+                call_command('create_safe_superuser', username='admin', email='admin@example.com', password='adminpassword123')
+                print("✅ Superuser created via custom management command!")
+            except Exception as cmd_error:
+                print(f"❌ Custom management command also failed: {cmd_error}")
+
+    # Also create a secondary superuser with different credentials
+    try:
+        if not User.objects.filter(username='superadmin').exists():
+            print("Creating secondary superuser...")
+            default_batch = Batch.objects.get(id=1)
+            default_level = AcademicLevel.objects.get(id=1)
+            default_stream = Stream.objects.get(id=1)
             
-            if result.returncode == 0:
-                print("✅ Superuser created via createsuperuser command!")
-            else:
-                print(f"❌ Failed to create superuser: {result.stderr}")
+            user_data = {
+                'username': 'superadmin',
+                'email': 'superadmin@elective.sys',
+                'first_name': 'Super',
+                'last_name': 'Admin',
+                'name': 'Super Admin',
+                'roll_number': 'SUPER001',
+                'user_type': 'admin',
+                'current_semester': 1,
+                'is_superuser': True,
+                'is_staff': True,
+                'is_active': True,
+                'batch': default_batch,
+                'level': default_level,
+                'stream': default_stream,
+            }
+            
+            user = User(**user_data)
+            user.set_password('SuperSecure2025!')
+            user.save()
+            
+            print("✅ Secondary superuser created!")
+            print(f"   Username: {user.username}")
+            print("   Password: SuperSecure2025!")
+            print(f"   Email: {user.email}")
+        else:
+            print("✅ Secondary superuser already exists")
+    except Exception as e:
+        print(f"❌ Error creating secondary superuser: {e}")
 
 except Exception as e:
     print(f"❌ Error in superuser creation script: {e}")
