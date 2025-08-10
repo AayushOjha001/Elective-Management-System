@@ -47,7 +47,7 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 COPY PMS/ ./
 
 # Copy existing database if it exists (optional)
-COPY database_backup.sqlite3 /app/data/pms_production.sqlite3* ./data/
+COPY database_backup.sqlite3 ./
 
 # Copy startup script
 COPY start.sh .
