@@ -23,6 +23,10 @@ if [ "$(id -u)" = "0" ]; then
     chown -R django:django /app/data
 fi
 
+# Set Python path
+export PYTHONPATH="/app:$PYTHONPATH"
+cd /app
+
 echo "Running migrations..."
 python manage.py migrate --noinput --settings=PMS.settings_production_clean
 
@@ -141,7 +145,9 @@ except Exception as e:
 EOF
 
 echo "Starting Gunicorn..."
-exec gunicorn PMS.wsgi:application \
+cd /app
+export PYTHONPATH="/app:$PYTHONPATH"
+exec gunicorn PMS.wsgi_production:application \
     --bind 0.0.0.0:8000 \
     --workers 3 \
     --timeout 120 \

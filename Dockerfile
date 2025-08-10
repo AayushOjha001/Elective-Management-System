@@ -33,6 +33,7 @@ ENV DEBUG=0
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y \
     libpq5 \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Set work directory
@@ -42,8 +43,8 @@ WORKDIR /app
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
-# Copy project files
-COPY PMS/ .
+# Copy project files - maintain Django project structure
+COPY PMS/ ./
 
 # Copy startup script
 COPY start.sh .
