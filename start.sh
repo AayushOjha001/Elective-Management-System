@@ -30,46 +30,65 @@ cd /app
 echo "Running migrations..."
 python manage.py migrate --noinput --settings=PMS.settings_production_clean
 
-echo "Creating required model instances for User model first..."
+echo "Creating ALL required model instances BEFORE any superuser creation..."
 python manage.py shell --settings=PMS.settings_production_clean << 'EOF'
 try:
-    from apps.course.models import Batch, AcademicLevel, Stream
+    from apps.course.models import Batch, AcademicLevel, Stream, ElectiveSession
     
-    # Create default Batch if it doesn't exist
+    print("Creating required model instances in correct order...")
+    
+    # Create default Batch with id=1 (required by User model default)
     if not Batch.objects.filter(id=1).exists():
         batch = Batch.objects.create(id=1, name='Default Batch')
         print(f"✅ Created default batch: {batch}")
     else:
-        print("✅ Default batch already exists")
+        batch = Batch.objects.get(id=1)
+        print(f"✅ Default batch already exists: {batch}")
     
-    # Create default AcademicLevel if it doesn't exist
+    # Create default AcademicLevel with id=1 (required by User model default)
     if not AcademicLevel.objects.filter(id=1).exists():
         level = AcademicLevel.objects.create(id=1, name='Default Level')
         print(f"✅ Created default academic level: {level}")
     else:
-        print("✅ Default academic level already exists")
-    
-    # Create default Stream if it doesn't exist
-    if not Stream.objects.filter(id=1).exists():
         level = AcademicLevel.objects.get(id=1)
+        print(f"✅ Default academic level already exists: {level}")
+    
+    # Create default Stream with id=1
+    if not Stream.objects.filter(id=1).exists():
         stream = Stream.objects.create(id=1, stream_name='Default Stream', level=level)
         print(f"✅ Created default stream: {stream}")
     else:
-        print("✅ Default stream already exists")
+        stream = Stream.objects.get(id=1)
+        print(f"✅ Default stream already exists: {stream}")
+    
+    # Create default ElectiveSession (optional, but good to have)
+    if not ElectiveSession.objects.filter(id=1).exists():
+        session = ElectiveSession.objects.create(
+            id=1, 
+            level=level, 
+            semester=1, 
+            min_student=5, 
+            subjects_provided=2
+        )
+        print(f"✅ Created default elective session: {session}")
+    else:
+        session = ElectiveSession.objects.get(id=1)
+        print(f"✅ Default elective session already exists: {session}")
         
-    print("✅ All required model instances are ready")
+    print("✅ All required model instances are ready!")
     
 except Exception as e:
     print(f"❌ Error creating required model instances: {e}")
     import traceback
     traceback.print_exc()
+    raise  # Stop execution if this fails
 EOF
 
 echo "Attempting to create superuser safely..."
 python manage.py shell --settings=PMS.settings_production_clean << 'EOF'
 try:
     from django.contrib.auth import get_user_model
-    from apps.course.models import Batch, AcademicLevel, Stream
+    from apps.course.models import Batch, AcademicLevel, Stream, ElectiveSession
     
     User = get_user_model()
     
@@ -91,6 +110,13 @@ try:
             default_level = AcademicLevel.objects.get(id=1)
             default_stream = Stream.objects.get(id=1)
             
+            # Get default ElectiveSession (nullable field)
+            default_session = None
+            try:
+                default_session = ElectiveSession.objects.get(id=1)
+            except ElectiveSession.DoesNotExist:
+                print("No default ElectiveSession found, leaving current_semester as None")
+            
             # Create superuser with all required fields
             user_data = {
                 'username': 'admin',
@@ -100,7 +126,7 @@ try:
                 'name': 'Admin User',
                 'roll_number': 'ADMIN001',
                 'user_type': 'admin',
-                'current_semester': 1,
+                'current_semester': default_session,  # ElectiveSession instance or None
                 'is_superuser': True,
                 'is_staff': True,
                 'is_active': True,
@@ -137,6 +163,13 @@ try:
             default_level = AcademicLevel.objects.get(id=1)
             default_stream = Stream.objects.get(id=1)
             
+            # Get default ElectiveSession (nullable field)
+            default_session = None
+            try:
+                default_session = ElectiveSession.objects.get(id=1)
+            except ElectiveSession.DoesNotExist:
+                print("No default ElectiveSession found for secondary user, leaving current_semester as None")
+            
             user_data = {
                 'username': 'superadmin',
                 'email': 'superadmin@elective.sys',
@@ -145,7 +178,7 @@ try:
                 'name': 'Super Admin',
                 'roll_number': 'SUPER001',
                 'user_type': 'admin',
-                'current_semester': 1,
+                'current_semester': default_session,  # ElectiveSession instance or None
                 'is_superuser': True,
                 'is_staff': True,
                 'is_active': True,

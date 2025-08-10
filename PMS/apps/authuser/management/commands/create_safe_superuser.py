@@ -1,6 +1,6 @@
 from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
-from apps.course.models import Batch, AcademicLevel, Stream
+from apps.course.models import Batch, AcademicLevel, Stream, ElectiveSession
 
 
 class Command(BaseCommand):
@@ -63,6 +63,24 @@ class Command(BaseCommand):
             if created:
                 self.stdout.write(f'✅ Created default stream: {stream}')
             
+            # Create or get default ElectiveSession
+            session = None
+            try:
+                session, created = ElectiveSession.objects.get_or_create(
+                    id=1,
+                    defaults={
+                        'level': level,
+                        'semester': 1,
+                        'min_student': 5,
+                        'subjects_provided': 2
+                    }
+                )
+                if created:
+                    self.stdout.write(f'✅ Created default elective session: {session}')
+            except Exception as e:
+                self.stdout.write(f'⚠️ Could not create ElectiveSession: {e}')
+                session = None
+            
             # Create superuser
             user_data = {
                 'username': username,
@@ -72,7 +90,7 @@ class Command(BaseCommand):
                 'name': 'Admin User',
                 'roll_number': 'ADMIN001',
                 'user_type': 'admin',
-                'current_semester': 1,
+                'current_semester': session,  # ElectiveSession instance or None
                 'is_superuser': True,
                 'is_staff': True,
                 'is_active': True,
