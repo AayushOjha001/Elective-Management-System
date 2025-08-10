@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      # Persist database data
+      - database_data:/app/data
+      # Optional: Mount your SQLite backup
+      - ./database_backup.sqlite3:/app/data/pms_production.sqlite3:ro
+    environment:
+      - DJANGO_SETTINGS_MODULE=PMS.settings_production_clean
+      - DEBUG=0
+    depends_on:
+      - postgres
+    
+  # Optional: Use PostgreSQL for production instead of SQLite
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: pms_production
+      POSTGRES_USER: pms_user
+      POSTGRES_PASSWORD: secure_password_123
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+volumes:
+  database_data:
+    driver: local
+  postgres_data:
+    driver: local

@@ -27,62 +27,20 @@ fi
 export PYTHONPATH="/app:$PYTHONPATH"
 cd /app
 
+echo "Checking for existing database backup..."
+# Check if backup database exists and copy it if needed
+if [ -f "database_backup.sqlite3" ] && [ ! -f "/app/data/pms_production.sqlite3" ]; then
+    echo "📦 Found database backup, copying to production location..."
+    cp database_backup.sqlite3 /app/data/pms_production.sqlite3
+    chown django:django /app/data/pms_production.sqlite3
+    chmod 664 /app/data/pms_production.sqlite3
+    echo "✅ Database backup restored!"
+else
+    echo "⚠️  No backup found or database already exists"
+fi
+
 echo "Running migrations..."
 python manage.py migrate --noinput --settings=PMS.settings_production_clean
-
-echo "Creating ALL required model instances BEFORE any superuser creation..."
-python manage.py shell --settings=PMS.settings_production_clean << 'EOF'
-try:
-    from apps.course.models import Batch, AcademicLevel, Stream, ElectiveSession
-    
-    print("Creating required model instances in correct order...")
-    
-    # Create default Batch with id=1 (required by User model default)
-    if not Batch.objects.filter(id=1).exists():
-        batch = Batch.objects.create(id=1, name='Default Batch')
-        print(f"✅ Created default batch: {batch}")
-    else:
-        batch = Batch.objects.get(id=1)
-        print(f"✅ Default batch already exists: {batch}")
-    
-    # Create default AcademicLevel with id=1 (required by User model default)
-    if not AcademicLevel.objects.filter(id=1).exists():
-        level = AcademicLevel.objects.create(id=1, name='Default Level')
-        print(f"✅ Created default academic level: {level}")
-    else:
-        level = AcademicLevel.objects.get(id=1)
-        print(f"✅ Default academic level already exists: {level}")
-    
-    # Create default Stream with id=1
-    if not Stream.objects.filter(id=1).exists():
-        stream = Stream.objects.create(id=1, stream_name='Default Stream', level=level)
-        print(f"✅ Created default stream: {stream}")
-    else:
-        stream = Stream.objects.get(id=1)
-        print(f"✅ Default stream already exists: {stream}")
-    
-    # Create default ElectiveSession (optional, but good to have)
-    if not ElectiveSession.objects.filter(id=1).exists():
-        session = ElectiveSession.objects.create(
-            id=1, 
-            level=level, 
-            semester=1, 
-            min_student=5, 
-            subjects_provided=2
-        )
-        print(f"✅ Created default elective session: {session}")
-    else:
-        session = ElectiveSession.objects.get(id=1)
-        print(f"✅ Default elective session already exists: {session}")
-        
-    print("✅ All required model instances are ready!")
-    
-except Exception as e:
-    print(f"❌ Error creating required model instances: {e}")
-    import traceback
-    traceback.print_exc()
-    raise  # Stop execution if this fails
-EOF
 
 echo "Attempting to create superuser safely..."
 python manage.py shell --settings=PMS.settings_production_clean << 'EOF'
@@ -95,6 +53,25 @@ try:
     print(f"Using User model: {User}")
     print(f"User model fields: {[f.name for f in User._meta.get_fields()]}")
     
+    # Verify required models exist (should be created by migrations now)
+    print("Verifying required model instances exist...")
+    try:
+        default_batch = Batch.objects.get(id=1)
+        default_level = AcademicLevel.objects.get(id=1)
+        default_stream = Stream.objects.get(id=1)
+        print("✅ All required foreign key models exist")
+    except Exception as e:
+        print(f"❌ Required models missing: {e}")
+        print("Creating missing models as fallback...")
+        
+        # Fallback creation if migration failed
+        default_batch, _ = Batch.objects.get_or_create(id=1, defaults={'name': 'Default Batch'})
+        default_level, _ = AcademicLevel.objects.get_or_create(id=1, defaults={'name': 'Default Level'})
+        default_stream, _ = Stream.objects.get_or_create(
+            id=1, 
+            defaults={'stream_name': 'Default Stream', 'level': default_level}
+        )
+    
     # Check if any superuser exists
     if User.objects.filter(is_superuser=True).exists():
         print("✅ Superuser already exists")
@@ -105,11 +82,6 @@ try:
         print("Creating superuser...")
         
         try:
-            # Get the default required foreign key objects
-            default_batch = Batch.objects.get(id=1)
-            default_level = AcademicLevel.objects.get(id=1)
-            default_stream = Stream.objects.get(id=1)
-            
             # Get default ElectiveSession (nullable field)
             default_session = None
             try:
@@ -159,9 +131,6 @@ try:
     try:
         if not User.objects.filter(username='superadmin').exists():
             print("Creating secondary superuser...")
-            default_batch = Batch.objects.get(id=1)
-            default_level = AcademicLevel.objects.get(id=1)
-            default_stream = Stream.objects.get(id=1)
             
             # Get default ElectiveSession (nullable field)
             default_session = None
@@ -208,41 +177,6 @@ EOF
 
 echo "Collecting static files..."
 python manage.py collectstatic --noinput --settings=PMS.settings_production_clean
-
-echo "Creating required model instances for User model..."
-python manage.py shell --settings=PMS.settings_production_clean << 'EOF'
-try:
-    from apps.course.models import Batch, AcademicLevel, Stream
-    
-    # Create default Batch if it doesn't exist
-    if not Batch.objects.filter(id=1).exists():
-        batch = Batch.objects.create(id=1, name='Default Batch')
-        print(f"✅ Created default batch: {batch}")
-    else:
-        print("✅ Default batch already exists")
-    
-    # Create default AcademicLevel if it doesn't exist
-    if not AcademicLevel.objects.filter(id=1).exists():
-        level = AcademicLevel.objects.create(id=1, name='Default Level')
-        print(f"✅ Created default academic level: {level}")
-    else:
-        print("✅ Default academic level already exists")
-    
-    # Create default Stream if it doesn't exist
-    if not Stream.objects.filter(id=1).exists():
-        level = AcademicLevel.objects.get(id=1)
-        stream = Stream.objects.create(id=1, stream_name='Default Stream', level=level)
-        print(f"✅ Created default stream: {stream}")
-    else:
-        print("✅ Default stream already exists")
-        
-    print("✅ All required model instances are ready")
-    
-except Exception as e:
-    print(f"❌ Error creating required model instances: {e}")
-    import traceback
-    traceback.print_exc()
-EOF
 
 echo "Starting Gunicorn..."
 cd /app

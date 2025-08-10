@@ -46,6 +46,9 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 # Copy project files - maintain Django project structure
 COPY PMS/ ./
 
+# Copy existing database if it exists (optional)
+COPY database_backup.sqlite3 /app/data/pms_production.sqlite3* ./data/
+
 # Copy startup script
 COPY start.sh .
 RUN chmod +x start.sh
