@@ -17,13 +17,14 @@ from apps.authuser.formsets import PriorityFormSet
 from apps.authuser.models import StudentProxyModel, User
 from apps.course.models import ElectiveSubject
 from apps.student.models import ElectivePriority
+from apps.student.views import clean_whitespace
 
 User = get_user_model()
 
 
 class PriorityInline(admin.TabularInline):
     model = ElectivePriority
-    extra = 5
+    extra = 2
     fields = ('subject', 'priority')
     form = PriorityForm
     formset = PriorityFormSet
@@ -92,7 +93,7 @@ class StudentAdmin(UserAdmin):
             # path('enter-priority', self.admin_site.admin_view(self.handle_csv_upload), name='handle-csv-upload')
         ]
         return custom_urls + urls
-
+    
     @staticmethod
     def create_student_record_from_uploaded_csv(csv_file, academic_level, batch, faculty):
         decoded_file = csv_file.read().decode('utf-8')
@@ -100,9 +101,10 @@ class StudentAdmin(UserAdmin):
         reader = csv.DictReader(io_string, delimiter=',', quotechar='|')
         list_of_created_username = []
         for row in reader:
-            name = row.get(NAME_FIELD)
-            roll_number = row.get(ROLL_NUMBER_FIELD)
-            email = row.get(EMAIL_FIELD)
+            # Apply clean_whitespace helper function to remove all types of whitespace
+            name = clean_whitespace(row.get(NAME_FIELD, ''))
+            roll_number = clean_whitespace(row.get(ROLL_NUMBER_FIELD, ''))
+            email = clean_whitespace(row.get(EMAIL_FIELD, ''))
 
             try:
                 user = User.objects.create(username=roll_number, name=name, roll_number=roll_number,

@@ -98,29 +98,142 @@ def prepare_pandas_dataframe_from_database(batch, semester, stream):
     return df
 
 
+def filter_result_df_by_desired_subjects(result_df):
+    """
+    Filter the result dataframe to only show assignments up to each student's desired number of subjects.
+    This preserves all algorithmic assignments but limits the output based on student preferences.
+    
+    Returns a filtered copy of the result_df where each student only has assignments 
+    equal to their desired_number_of_subjects.
+    """
+    if result_df is None or result_df.empty:
+        return result_df
+    
+    # Create a copy of the result dataframe
+    filtered_df = result_df.copy()
+    
+    # Process each student column
+    for student in filtered_df.columns:
+        if student in ['number_of_students'] or student.startswith('Unnamed'):
+            continue
+            
+        # Get all subjects this student is assigned to
+        student_assignments = []
+        for subject in filtered_df.index:
+            if filtered_df.at[subject, student] == 1:
+                # Get this student's priority for this subject
+                try:
+                    priority_entry = ElectivePriority.objects.filter(
+                        student__name=student,
+                        subject__subject_name=subject
+                    ).first()
+                    priority = priority_entry.priority if priority_entry else 999
+                    desired_count = priority_entry.desired_number_of_subjects if priority_entry and priority_entry.desired_number_of_subjects else 2
+                except:
+                    priority = 999
+                    desired_count = 2
+                    
+                student_assignments.append({
+                    'subject': subject,
+                    'priority': priority,
+                    'desired_count': desired_count
+                })
+        
+        if not student_assignments:
+            continue
+            
+        # Sort by priority (lower number = higher priority)
+        student_assignments.sort(key=lambda x: x['priority'])
+        
+        # Get the desired count
+        desired_count = student_assignments[0]['desired_count'] if student_assignments else 2
+        
+        # Clear all assignments for this student first
+        for subject in filtered_df.index:
+            filtered_df.at[subject, student] = 0
+            
+        # Reassign only the top N assignments based on desired count
+        for i, assignment in enumerate(student_assignments):
+            if i < desired_count:
+                filtered_df.at[assignment['subject'], student] = 1
+            else:
+                break
+    
+    return filtered_df
+
+
 def get_normalized_result_from_dataframe(result_df):
+    """
+    Normalize the algorithm result dataframe into a format suitable for templates and Excel generation.
+    This function now respects each student's desired number of subjects by only showing their top N assignments.
+    """
+    # First, create a mapping of student assignments with their priorities
+    student_assignments = {}
+    
+    # Collect all assignments for each student
+    for student in result_df.columns:
+        if student in ['number_of_students'] or student.startswith('Unnamed'):
+            continue
+            
+        student_assignments[student] = []
+        for subject in result_df.index:
+            if result_df.at[subject, student] == 1:
+                # Get this student's priority for this subject to determine ranking
+                try:
+                    priority_entry = ElectivePriority.objects.filter(
+                        student__name=student,
+                        subject__subject_name=subject
+                    ).first()
+                    priority = priority_entry.priority if priority_entry else 999
+                    desired_count = priority_entry.desired_number_of_subjects if priority_entry and priority_entry.desired_number_of_subjects else 2
+                except:
+                    priority = 999
+                    desired_count = 2
+                    
+                student_assignments[student].append({
+                    'subject': subject,
+                    'priority': priority,
+                    'desired_count': desired_count
+                })
+    
+    # Limit each student's assignments to their desired number of subjects
+    filtered_assignments = {}
+    for student, assignments in student_assignments.items():
+        if not assignments:
+            continue
+            
+        # Sort by priority (lower number = higher priority)
+        assignments.sort(key=lambda x: x['priority'])
+        
+        # Get the desired count (should be the same for all assignments of this student)
+        desired_count = assignments[0]['desired_count'] if assignments else 2
+        
+        # Keep only the top N assignments based on desired count
+        filtered_assignments[student] = assignments[:desired_count]
+    
+    # Now build the normalized data structure
     normalized_data_list = []
     for subject in result_df.index:
         normalized_data = dict()
         normalized_data['subject_name'] = subject
         students = []
         
-        for student in result_df.columns:
-            # Skip non-student columns like 'number_of_students'
-            if student in ['number_of_students'] or student.startswith('Unnamed'):
-                continue
-            
-            if result_df.at[subject, student] == 1:  # Only students assigned (value = 1)
-                students.append(student)
+        # Only include students who should be assigned to this subject based on their desired count
+        for student, assignments in filtered_assignments.items():
+            for assignment in assignments:
+                if assignment['subject'] == subject:
+                    students.append(student)
+                    break
         
         normalized_data['students'] = StudentProxyModel.objects.filter(name__in=students)
         
-        # Calculate student count from actual assignments, not from a separate column
+        # Calculate student count from filtered assignments
         student_count = len(students)
         normalized_data['student_count'] = student_count
         normalized_data['student_count_1'] = student_count + 1
         normalized_data['row_count'] = 1 if student_count == 0 else student_count
         normalized_data_list.append(normalized_data)
+    
     return normalized_data_list
 
 

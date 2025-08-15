@@ -10,7 +10,7 @@ from django.shortcuts import get_object_or_404
 from apps.course.models import ElectiveSubject, ElectiveSession, Batch, Stream
 from apps.authuser.models import StudentProxyModel
 from apps.algorithm.generic_algorithm import GenericAlgorithm
-from apps.utils import get_normalized_result_from_dataframe
+from apps.utils import get_normalized_result_from_dataframe, filter_result_df_by_desired_subjects
 
 
 def create_subject_wise_excel_files(batch, semester, stream, result_df):
@@ -23,12 +23,15 @@ def create_subject_wise_excel_files(batch, semester, stream, result_df):
     if result_df is None or result_df.empty:
         return excel_files
     
-    # Get all subjects (rows in the result_df)
-    for subject_name in result_df.index:
-        # Get students assigned to this subject
+    # Filter the result dataframe to respect each student's desired number of subjects
+    filtered_df = filter_result_df_by_desired_subjects(result_df)
+    
+    # Get all subjects (rows in the filtered_df)
+    for subject_name in filtered_df.index:
+        # Get students assigned to this subject from filtered dataframe
         assigned_students = []
-        for student_name in result_df.columns:
-            if result_df.at[subject_name, student_name] == 1:
+        for student_name in filtered_df.columns:
+            if filtered_df.at[subject_name, student_name] == 1:
                 assigned_students.append(student_name)
         
         # Create a DataFrame for this subject
@@ -176,13 +179,16 @@ def create_master_excel_with_all_subjects(batch, semester, stream, result_df):
     if result_df is None or result_df.empty:
         return None
     
+    # Filter the result dataframe to respect each student's desired number of subjects
+    filtered_df = filter_result_df_by_desired_subjects(result_df)
+    
     output = BytesIO()
     
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        # Create overview sheet
+        # Create overview sheet using filtered data
         overview_data = []
-        for subject_name in result_df.index:
-            student_count = sum(result_df.loc[subject_name])
+        for subject_name in filtered_df.index:
+            student_count = sum(filtered_df.loc[subject_name])
             overview_data.append({
                 'Subject Name': subject_name,
                 'Number of Students': student_count,
@@ -194,11 +200,11 @@ def create_master_excel_with_all_subjects(batch, semester, stream, result_df):
         overview_df = pd.DataFrame(overview_data)
         overview_df.to_excel(writer, sheet_name='Overview', index=False)
         
-        # Create a sheet for each subject
-        for subject_name in result_df.index:
+        # Create a sheet for each subject using filtered data
+        for subject_name in filtered_df.index:
             assigned_students = []
-            for student_name in result_df.columns:
-                if result_df.at[subject_name, student_name] == 1:
+            for student_name in filtered_df.columns:
+                if filtered_df.at[subject_name, student_name] == 1:
                     assigned_students.append(student_name)
             
             if assigned_students:
