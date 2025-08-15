@@ -4,7 +4,7 @@ import pandas as pd
 from io import BytesIO
 from .models import ElectiveSession, Batch, Stream
 from apps.algorithm.generic_algorithm import GenericAlgorithm
-from apps.utils import prepare_pandas_dataframe_from_database
+from apps.utils import prepare_pandas_dataframe_from_database, filter_result_df_by_desired_subjects
 from apps.excel_generator import (
     create_subject_wise_excel_files, 
     generate_all_subject_excel_files,
@@ -38,16 +38,18 @@ def download_allocation_result(request, session_id):
         # Run the algorithm with the correct parameters
         algorithm = GenericAlgorithm(batch, session, stream)
         result_df = algorithm.run()
-        
-        # Check if result_df has data
+          # Check if result_df has data
         if result_df is None or result_df.empty:
             return HttpResponse("No allocation data available for the selected parameters", status=400)
         
-        # Create Excel file with the actual results
+        # Filter the results based on each student's desired number of subjects
+        filtered_df = filter_result_df_by_desired_subjects(result_df)
+        
+        # Create Excel file with the filtered results
         output = BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            # Write the main allocation results
-            result_df.to_excel(writer, sheet_name='Student Allocations', index=True)
+            # Write the main allocation results (filtered to show only desired number of subjects)
+            filtered_df.to_excel(writer, sheet_name='Student Allocations', index=True)
         
         output.seek(0)
         

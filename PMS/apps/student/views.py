@@ -7,6 +7,23 @@ from apps.student.formsets import PriorityFormset
 from apps.system.views import get_admin_context
 
 
+def clean_whitespace(text):
+    """
+    Clean all types of whitespace from text:
+    - Strip leading/trailing whitespace
+    - Replace multiple internal spaces with single space
+    - Handle various whitespace characters
+    """
+    if not text or str(text).lower() == 'nan':
+        return ''
+    
+    # Convert to string and normalize whitespace
+    cleaned = str(text).strip()
+    # Replace multiple whitespace characters with single space
+    cleaned = ' '.join(cleaned.split())
+    return cleaned
+
+
 def enter_priority_in_bulk(request, *args, **kwargs):
     context = get_admin_context()
     context['has_data'] = False
@@ -76,15 +93,22 @@ def enter_priority_in_bulk(request, *args, **kwargs):
 def extract_student_pref(file, semester, stream, batch):
     """
     Extract student preferences from Excel file
-    Expected format: Roll Number | Priority 1 | Priority 2 | Priority 3 | Priority 4 | Priority 5
+    Expected format: Roll Number | Priority 1 | Priority 2 | Priority 3 | Priority 4 | Priority 5 | [Optional: no_of_electives]
     Where priorities contain subject names, not numbers
+    
+    The no_of_electives column is optional:
+    - If present, uses the specified number for each student (bounded between 1-5)
+    - If not present, defaults to 2 electives for all students
     """
     try:
         # Read Excel file
         df = pd.read_excel(file)
         
-        # Define required columns
-        required_columns = ['Roll Number', 'Priority 1', 'Priority 2', 'Priority 3', 'Priority 4', 'Priority 5']
+        # Define required columns (minimum needed)
+        required_columns = ['Roll Number', 'Priority 1', 'Priority 2']
+        
+        # Check if optional no_of_electives column exists
+        has_no_of_electives = 'no_of_electives' in df.columns
         
         # Check if all required columns exist
         missing_columns = [col for col in required_columns if col not in df.columns]
@@ -106,42 +130,64 @@ def extract_student_pref(file, semester, stream, batch):
             elective_for=semester, 
             stream=stream
         ).values_list('subject_name', flat=True))
-        
-        # Process each row
+          # Process each row
         processed_count = 0
         errors = []
         
         for index, row in df.iterrows():
-            try:
-                # Extract data
-                roll_number = str(row['Roll Number']).strip()
-                priority_1 = str(row['Priority 1']).strip()
-                priority_2 = str(row['Priority 2']).strip()
-                priority_3 = str(row['Priority 3']).strip()
-                priority_4 = str(row['Priority 4']).strip()
-                priority_5 = str(row['Priority 5']).strip()
+            try:                # Extract data and apply comprehensive whitespace cleaning using helper function
+                roll_number = clean_whitespace(row['Roll Number'])
+                priority_1 = clean_whitespace(row['Priority 1'])
+                priority_2 = clean_whitespace(row['Priority 2'])
+                priority_3 = clean_whitespace(row['Priority 3'])
+                priority_4 = clean_whitespace(row['Priority 4'])
+                priority_5 = clean_whitespace(row['Priority 5'])
+                
+                # Extract desired number of electives if column exists, otherwise default to 2
+                if has_no_of_electives:
+                    no_of_electives = row.get('no_of_electives', 2)
+                    # Handle potential NaN or non-numeric values
+                    try:
+                        no_of_electives = int(no_of_electives) if pd.notna(no_of_electives) else 2
+                        # Ensure reasonable bounds (between 1 and 5)
+                        no_of_electives = max(1, min(5, no_of_electives))
+                    except (ValueError, TypeError):
+                        no_of_electives = 2
+                else:
+                    no_of_electives = 2
                 
                 # Validate roll number
-                if not roll_number or roll_number.lower() == 'nan':
+                if not roll_number:
                     errors.append(f'Row {index + 2}: Roll Number is empty')
                     continue
                 if len(roll_number) < 6:  # Minimum length check
                     errors.append(f'Row {index + 2}: Invalid roll number format. Expected format: 079bct007')
                     continue
-                # Collect all priorities
-                priorities = [priority_1, priority_2, priority_3, priority_4, priority_5]
+                      # Collect priorities based on desired number of electives
+                all_priorities = [priority_1, priority_2, priority_3, priority_4, priority_5]
+                priorities = []
                 
-                # Remove empty/nan values
-                priorities = [p for p in priorities if p and p.lower() != 'nan']
-                  # Validate that subjects exist in database (flexible matching)
+                # Only collect the number of priorities the student wants
+                for i in range(min(no_of_electives, len(all_priorities))):
+                    if all_priorities[i]:  # clean_whitespace already handles nan and empty cases
+                        priorities.append(all_priorities[i])
+                
+                # Ensure we have at least the desired number of non-empty priorities
+                if len(priorities) < no_of_electives:
+                    errors.append(f'Row {index + 2}: Student wants {no_of_electives} electives but only provided {len(priorities)} valid priorities')
+                    continue# Validate that subjects exist in database (flexible matching)
                 invalid_subjects = []
                 matched_subjects = {}  # Store mapping of input to actual database subject
                 
                 for priority in priorities:
-                    # Try exact match first
+                    # Normalize priority for matching (remove extra spaces, consistent casing)
+                    normalized_priority = ' '.join(priority.split()).strip()
+                    
+                    # Try exact match first (case-insensitive)
                     exact_match = None
                     for db_subject in available_subjects:
-                        if priority.lower() == db_subject.lower():
+                        normalized_db_subject = ' '.join(db_subject.split()).strip()
+                        if normalized_priority.lower() == normalized_db_subject.lower():
                             exact_match = db_subject
                             break
                     
@@ -151,7 +197,8 @@ def extract_student_pref(file, semester, stream, batch):
                         # Try partial match (input subject is contained in database subject)
                         partial_match = None
                         for db_subject in available_subjects:
-                            if priority.lower() in db_subject.lower():
+                            normalized_db_subject = ' '.join(db_subject.split()).strip()
+                            if normalized_priority.lower() in normalized_db_subject.lower():
                                 partial_match = db_subject
                                 break
                         
@@ -163,23 +210,25 @@ def extract_student_pref(file, semester, stream, batch):
                 if invalid_subjects:
                     errors.append(f'Row {index + 2}: Invalid subject names: {", ".join(invalid_subjects)}')
                     continue
-                
-                # Check for duplicate subjects
+                  # Check for duplicate subjects
                 if len(set(priorities)) != len(priorities):
                     errors.append(f'Row {index + 2}: Duplicate subjects found. Each subject should appear only once.')
                     continue
-                  # TODO: Save to database
+                
                 # Find student by roll number and save priorities
                 try:
                     student = StudentProxyModel.objects.get(roll_number=roll_number)
                     print(f"Processing: {roll_number} (Student: {student.name})")
                     print(f"Priorities: {priorities}")
+                    print(f"Desired number of electives: {no_of_electives}")
                     
                     # Save priorities to database
                     from apps.student.models import ElectivePriority
-                      # Clear existing priorities for this student for this session
+                    
+                    # Clear existing priorities for this student for this session
                     ElectivePriority.objects.filter(student=student, session=semester).delete()
-                      # Save new priorities
+                    
+                    # Save new priorities
                     for priority_index, subject_name in enumerate(priorities, 1):
                         # Use matched subject name from database
                         actual_subject_name = matched_subjects.get(subject_name, subject_name)
@@ -189,7 +238,7 @@ def extract_student_pref(file, semester, stream, batch):
                             subject=subject,
                             priority=priority_index,
                             session=semester,  # Set the session/semester
-                            desired_number_of_subjects=2  # Default value
+                            desired_number_of_subjects=no_of_electives  # Use the extracted value
                         )
                     
                 except StudentProxyModel.DoesNotExist:
