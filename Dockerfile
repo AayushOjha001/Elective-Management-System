@@ -27,7 +27,7 @@ RUN groupadd -r django && useradd -r -g django django
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
-ENV DJANGO_SETTINGS_MODULE=PMS.settings_production
+ENV DJANGO_SETTINGS_MODULE=PMS.settings_production_clean
 ENV DEBUG=0
 
 # Install runtime dependencies
