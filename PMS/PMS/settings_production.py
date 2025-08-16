@@ -24,8 +24,9 @@ SECURE_HSTS_PRELOAD = True
 ALLOWED_HOSTS = [
     'elective-management-system.onrender.com',
     '*.onrender.com',
-    '*.itclub.asmitphuyal.com.np',
     'electivemanagent.itclub.asmitphuyal.com.np',
+    'itclub.asmitphuyal.com.np',
+    '*.itclub.asmitphuyal.com.np',
     'localhost',
     '127.0.0.1',
     '0.0.0.0'
@@ -40,6 +41,9 @@ if ALLOWED_HOSTS_ENV:
 ALLOWED_HOSTS = list(set([h.strip() for h in ALLOWED_HOSTS if h.strip()]))
 
 print(f"🔧 Production ALLOWED_HOSTS: {ALLOWED_HOSTS}")
+print(f"🔧 Total hosts configured: {len(ALLOWED_HOSTS)}")
+for i, host in enumerate(ALLOWED_HOSTS):
+    print(f"   {i+1}. '{host}'")
 
 # Database configuration for production
 if 'DATABASE_URL' in os.environ:

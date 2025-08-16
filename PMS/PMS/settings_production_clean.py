@@ -20,7 +20,10 @@ SECRET_KEY = os.environ.get('SECRET_KEY', '7u$p-*j3mykg2@)8p#hwa639=tlgol-f0o-9o
 # Allowed hosts - VERY EXPLICIT
 ALLOWED_HOSTS = [
     'elective-management-system.onrender.com',
-    '*.onrender.com', 
+    '*.onrender.com',
+    'electivemanagent.itclub.asmitphuyal.com.np',
+    'itclub.asmitphuyal.com.np',
+    '*.itclub.asmitphuyal.com.np',
     'localhost',
     '127.0.0.1',
     '0.0.0.0'
@@ -35,6 +38,9 @@ if ALLOWED_HOSTS_ENV:
 ALLOWED_HOSTS = list(set([h.strip() for h in ALLOWED_HOSTS if h.strip()]))
 
 print(f"🔧 Production ALLOWED_HOSTS: {ALLOWED_HOSTS}")
+print(f"🔧 Total hosts configured: {len(ALLOWED_HOSTS)}")
+for i, host in enumerate(ALLOWED_HOSTS):
+    print(f"   {i+1}. '{host}'")
 
 # Security settings
 SECURE_SSL_REDIRECT = True
