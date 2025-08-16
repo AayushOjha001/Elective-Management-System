@@ -23,7 +23,9 @@ SECURE_HSTS_PRELOAD = True
 # Allowed hosts - VERY EXPLICIT
 ALLOWED_HOSTS = [
     'elective-management-system.onrender.com',
-    '*.onrender.com', 
+    '*.onrender.com',
+    '*.itclub.asmitphuyal.com.np',
+    'electivemanagent.itclub.asmitphuyal.com.np',
     'localhost',
     '127.0.0.1',
     '0.0.0.0'
