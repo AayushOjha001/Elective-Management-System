@@ -337,21 +337,15 @@ def delete_student(request):
 
 
 def get_cached_allocation(batch_id, session_id, stream_id):
-    """
-    Get cached allocation data if it exists and is recent
-    """
+    """Get cached allocation data if it exists and is less than 1 hour old."""
     cache_key = f"allocation_{batch_id}_{session_id}_{stream_id}"
     cache_file = f"/tmp/elective_cache/{cache_key}.pkl"
-    
     if os.path.exists(cache_file):
         try:
             with open(cache_file, 'rb') as f:
                 cache_data = pickle.load(f)
-            
-            # Check if cache is less than 1 hour old
             if (pd.Timestamp.now() - cache_data['timestamp']).total_seconds() < 3600:
                 return cache_data['result_df']
-        except:
-            pass
-    
+        except Exception:
+            return None
     return None

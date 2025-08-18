@@ -3,6 +3,7 @@
 <form method="post" enctype="multipart/form-data">
     {% csrf_token %}
     {{form.as_p}}
+    <p><a class="button" href="{% url 'download_student_sample_csv' %}">⬇️ Download Sample CSV</a></p>
     <button class="button" type="submit">Upload CSV</button>
 </form>
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>

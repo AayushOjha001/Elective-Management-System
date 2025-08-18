@@ -11,7 +11,6 @@
 {% if not is_download %}
 <form method="post" enctype="multipart/form-data">    {% csrf_token %}    {{form.as_p}}
     <button class="button" type="submit"> View priority result</button>
-    <!--<button class="button" type="submit" name="_get_pdf"> Get PDF</button>-->
 </form>
 {% endif %}
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
@@ -102,6 +101,8 @@
 <div id="successMessage" class="success-message"></div>
 <div id="errorMessage" class="error-message"></div>
 
+{% if debug_df_shape %}<div style="font-size:11px;color:#666;margin:8px 0;">{{ debug_df_shape }} | {{ debug_result_shape }} | normalized: {{ debug_result_count }}</div>{% endif %}
+
 <table border="2px" id="allocationTable">
     <tr>
         <th>Subject Name</th>
@@ -146,6 +147,7 @@
         {% endif %}
     {% endfor %}
 </table>
+{% if debug_df_shape %}<p style="color:#888;font-size:12px;">{{ debug_df_shape }} | {{ debug_result_shape }} | normalized items: {{ debug_result_count }}</p>{% endif %}
 {% else %}
 {% trans 'Probable reasons for error:'%}
 <br>
@@ -211,9 +213,9 @@ function moveStudent(studentName, fromSubject, buttonElement) {
                 student_name: studentName,
                 from_subject: fromSubject,
                 to_subject: toSubject,
-                session_id: {{ semester.pk }},
-                batch_id: {{ batch.pk }},
-                stream_id: {{ stream.pk }}
+                session_id: "{{ semester.pk }}",
+                batch_id: "{{ batch.pk }}",
+                stream_id: "{{ stream.pk }}"
             })
         })
         .then(response => response.json())
@@ -250,9 +252,9 @@ function deleteStudent(studentName, fromSubject, buttonElement) {
             body: JSON.stringify({
                 student_name: studentName,
                 from_subject: fromSubject,
-                session_id: {{ semester.pk }},
-                batch_id: {{ batch.pk }},
-                stream_id: {{ stream.pk }}
+                session_id: "{{ semester.pk }}",
+                batch_id: "{{ batch.pk }}",
+                stream_id: "{{ stream.pk }}"
             })
         })
         .then(response => response.json())

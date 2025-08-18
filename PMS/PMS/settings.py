@@ -141,3 +141,6 @@ EMAIL_HOST_PASSWORD = 'ElectivePriorityManagementSystem123'
 EMAIL_PORT = 587
 
 WEBSITE_LINK = 'http://localhost:8000/admin/'
+
+# Use BigAutoField by default to silence warnings and for future migrations
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

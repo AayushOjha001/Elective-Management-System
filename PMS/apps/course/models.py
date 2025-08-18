@@ -53,16 +53,6 @@ class ElectiveSubject(models.Model):
         default=10,
         validators=[MinValueValidator(5)]
     )
-    max_students = models.PositiveIntegerField(
-        verbose_name='Maximum number of students allowed',
-        default=24
-    )
-
-    def clean(self):
-        if self.max_students <= self.min_students:
-            raise ValidationError(
-                {'max_students': 'Maximum students must be greater than minimum students.'}
-            )
 
     def __str__(self):
         return self.subject_name
