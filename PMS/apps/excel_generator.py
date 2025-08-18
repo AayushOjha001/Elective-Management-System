@@ -42,7 +42,7 @@ def create_subject_wise_excel_files(batch, semester, stream, result_df):
             student_details = []
             for index, student_name in enumerate(assigned_students, 1):
                 try:
-                    student = StudentProxyModel.objects.get(name=student_name, batch=batch, stream=stream)
+                    student = StudentProxyModel.objects.get(roll_number=student_name, batch=batch, stream=stream)
                     student_details.append({
                         'S.N.': index,
                         'Roll Number': student.roll_number,
@@ -147,18 +147,10 @@ def generate_all_subject_excel_files(session_id, batch_id, stream_id):
         batch = get_object_or_404(Batch, pk=batch_id)
         stream = get_object_or_404(Stream, pk=stream_id)
         
-        # First check if we have cached data (from user edits)
-        from apps.course.views import get_cached_allocation
-        cached_result = get_cached_allocation(batch_id, session_id, stream_id)
-        
-        if cached_result is not None:
-            print("Using cached/edited allocation data for Excel generation")
-            result_df = cached_result
-        else:
-            # Run the algorithm if no cached data
-            print("Running fresh algorithm for Excel generation")
-            algorithm = GenericAlgorithm(batch, session, stream)
-            result_df = algorithm.run()
+        # Run the algorithm (caching disabled)
+        print("Running fresh algorithm for Excel generation (cache disabled)")
+        algorithm = GenericAlgorithm(batch, session, stream)
+        result_df = algorithm.run()
         
         if result_df is None or result_df.empty:
             return None, "No allocation data available"
@@ -212,7 +204,7 @@ def create_master_excel_with_all_subjects(batch, semester, stream, result_df):
                 student_details = []
                 for student_name in assigned_students:
                     try:
-                        student = StudentProxyModel.objects.get(name=student_name, batch=batch, stream=stream)
+                        student = StudentProxyModel.objects.get(roll_number=student_name, batch=batch, stream=stream)
                         student_details.append({
                             'Roll Number': student.roll_number,
                             'Student Name': student.name,

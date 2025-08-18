@@ -102,6 +102,9 @@
 <div id="successMessage" class="success-message"></div>
 <div id="errorMessage" class="error-message"></div>
 
+<!-- Debug Info -->
+{% if debug_df_shape %}<div style="font-size:11px;color:#666;margin:8px 0;">{{ debug_df_shape }} | {{ debug_result_shape }} | normalized: {{ debug_result_count }}</div>{% endif %}
+
 <table border="2px" id="allocationTable">
     <tr>
         <th>Subject Name</th>
@@ -146,6 +149,7 @@
         {% endif %}
     {% endfor %}
 </table>
+{% if debug_df_shape %}<p style="color:#888;font-size:12px;">{{ debug_df_shape }} | {{ debug_result_shape }} | normalized items: {{ debug_result_count }}</p>{% endif %}
 {% else %}
 {% trans 'Probable reasons for error:'%}
 <br>

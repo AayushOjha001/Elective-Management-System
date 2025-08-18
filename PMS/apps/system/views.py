@@ -42,17 +42,14 @@ def display_report(request, *args, **kwargs):
             context['stream'] = stream
 
             if is_data_entry_complete:
-                prepare_pandas_dataframe_from_database(batch, semester, stream)
-                
+                df_prior = prepare_pandas_dataframe_from_database(batch, semester, stream)
+                context['debug_df_shape'] = f"priorities_df shape: {getattr(df_prior,'shape',None)}"
                 algo = GenericAlgorithm(batch, semester, stream)
                 result_as_df = algo.run()
-                
+                context['debug_result_shape'] = f"result_df shape: {getattr(result_as_df,'shape',None)}"
                 normalized_result = get_normalized_result_from_dataframe(result_as_df)
-                # AlgorithClass = get_suitable_algorithm_class(semester.subjects_provided)
-                # algorithm = AlgorithClass(student_queryset, semester, list(subjects))
-                # algorithm.run()
-                # normalized_result = normalize_result(algorithm.get_result())
                 context['result'] = normalized_result
+                context['debug_result_count'] = len(normalized_result)
             else:
                 outlier_messages = get_outliers_message(batch, stream, semester)
                 context['outlier_messages'] = outlier_messages

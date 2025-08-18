@@ -18,16 +18,19 @@ from django.urls import path, include
 from django.views.generic import RedirectView
 
 from apps.ajax_apis import get_faculty_according_to_level, get_semester_according_to_level
-from apps.student.views import enter_priority_in_bulk
+from apps.student.views import enter_priority_in_bulk, download_priority_template
 from apps.system.views import display_report
 from apps.course.views import download_allocation_result
+from apps.authuser.views import download_student_sample_csv
 
 urlpatterns = [
     path('', RedirectView.as_view(url='login/')),
     path('login/', admin.site.urls),
     path('report/', display_report, name='display_result'),
     path('enter-priorities/', enter_priority_in_bulk, name='enter_priorities'),
+    path('download-priority-template/<str:academic_level>/', download_priority_template, name='download_priority_template'),
     path('download-allocation/<int:session_id>/', download_allocation_result, name='download_allocation_result'),
+    path('download-student-sample-csv/', download_student_sample_csv, name='download_student_sample_csv'),
     
     # Include course URLs for Excel downloads
     path('course/', include('apps.course.urls')),

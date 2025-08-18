@@ -9,13 +9,11 @@ class GenericAlgorithm:
         self.semester = semester
         self.stream = stream
         self.df_of_priorities = prepare_pandas_dataframe_from_database(batch, semester, stream)
-        
         # If no priorities exist, initialize empty structures
         if self.df_of_priorities.empty:
             self.result_df = pd.DataFrame()
             self.subjects_list_in_order = []
             return
-            
         self.minimum_subject_threshold = semester.min_student
         self.result_df = None
         self.subjects_list_in_order = self.df_of_priorities.index
@@ -35,17 +33,13 @@ class GenericAlgorithm:
             return False
 
     def get_desired_number_of_subjects_for_student(self, student):
-        """
-        For Masters students: dynamically allow the number of subjects they actually selected ( >=1 )
-        For others: use desired_number_of_subjects if set, else fallback to 2.
-        """
+        """Masters: allow dynamic count they selected (>=1). Others: desired_number_of_subjects or fallback 2."""
         if self.is_masters_student(student):
             actual_selections = ElectivePriority.objects.filter(
                 student__name=student,
                 session=self.semester
             ).count()
             return actual_selections if actual_selections > 0 else 1
-
         priority_entry = ElectivePriority.objects.filter(
             student__name=student,
             session=self.semester
@@ -65,23 +59,19 @@ class GenericAlgorithm:
         return self.df_of_priorities
 
     def is_subject_at_capacity(self, subject_index):
-        """Capacity enforcement currently disabled (always returns False)."""
+        """Capacity enforcement disabled (always False)."""
         return False
 
     def insert_from_priority_to_result(self):
         self.df_of_priorities = self.arrange_df_according_to_priority_sum()
         student_columns = [col for col in self.df_of_priorities.columns
-                           if col not in ['number_of_students', 'priority_sum'] and not col.startswith('Unnamed')]
-
-        self.result_df = pd.DataFrame({}, index=self.df_of_priorities.index.to_list(),
-                                      columns=student_columns)
+                           if col not in ['number_of_students', 'priority_sum'] and not str(col).startswith('Unnamed')]
+        self.result_df = pd.DataFrame({}, index=self.df_of_priorities.index.to_list(), columns=student_columns)
         # Initialize every cell to 0
         for index in self.result_df.index:
             for column in self.result_df.columns:
                 self.result_df.at[index, column] = 0
-
-        total_assignments = 0  # retained for potential future use
-
+        total_assignments = 0  # retained placeholder
         for column in student_columns:
             student_priorities = self.df_of_priorities[column].dropna()
             if student_priorities.empty:
@@ -123,6 +113,7 @@ class GenericAlgorithm:
                         self.arrange_priority_for_a_particular_student(column)
 
     def run(self):
+        # Keep cache usage; adjust if fresh allocation always desired.
         from apps.course.views import get_cached_allocation
         cached_result = get_cached_allocation(self.batch.pk, self.semester.pk, self.stream.pk)
         if cached_result is not None:
@@ -137,7 +128,7 @@ class GenericAlgorithm:
         return self.result_df
 
     def display_result(self):
-        # Silenced debug output (placeholder for future logging)
+        # Silent placeholder
         pass
 
     def allocate_masters_students_flexibly(self):
