@@ -1,10 +1,13 @@
 from django.template.response import TemplateResponse
+from django.http import HttpResponse, JsonResponse
+from django.shortcuts import render
 import pandas as pd
 from apps.authuser.models import StudentProxyModel
 from apps.course.forms import PriorityEntryDetailFormset
 from apps.course.models import ElectiveSubject
 from apps.student.formsets import PriorityFormset
 from apps.system.views import get_admin_context
+import openpyxl
 
 
 def clean_whitespace(text):
@@ -29,7 +32,7 @@ def enter_priority_in_bulk(request, *args, **kwargs):
     context['has_data'] = False
     
     if request.method == 'GET':
-        form = PriorityEntryDetailFormset    
+        form = PriorityEntryDetailFormset()
     elif '_upload_excel' in request.POST:
         form = PriorityEntryDetailFormset(request.POST)
         excel_file = request.FILES.get('excel_file')
@@ -82,6 +85,10 @@ def enter_priority_in_bulk(request, *args, **kwargs):
             context['form_data'] = form.cleaned_data
             if formset.is_valid():
                 formset.save()
+                # Invalidate cache after manual priority entry
+                batch = form.cleaned_data.get('batch', None)
+                if batch and semester and stream:
+                    pass  # removed cache invalidation
                 context['message'] = 'Data inserted successfully'
                 context['is_success'] = True
     context['form'] = form
@@ -90,25 +97,97 @@ def enter_priority_in_bulk(request, *args, **kwargs):
         'admin/priority/enter_priority_in_bulk.html',
         context
     )
+
+
+def download_priority_template(request, academic_level):
+    """
+    Generates and serves a downloadable Excel template for students to enter their elective priorities.
+    The template structure is dynamic based on the academic level:
+    - For 'Bachelors', the template includes standard priority columns.
+    - For 'Masters', an additional 'no_of_electives' column is added.
+    """
+    wb = openpyxl.Workbook()
+
+    # Main sheet with sample data
+    ws = wb.active
+    ws.title = 'PriorityData'
+    headers = [
+        'Name', 'Roll Number', 'Email', 'Priority 1', 'Priority 2', 'Priority 3', 'Priority 4', 'Priority 5'
+    ]
+    
+    sample_rows = [
+        ['John Doe', '079bct001', 'john.doe@example.com', 'Subject A', 'Subject B', 'Subject C', 'Subject D', 'Subject E'],
+        ['Jane Smith', '079bct002', 'jane.smith@example.com', 'Subject B', 'Subject A', 'Subject D', 'Subject C', 'Subject E'],
+        ['Bob Johnson', '079bct003', 'bob.johnson@example.com', 'Subject C', 'Subject D', 'Subject A', 'Subject B', 'Subject E'],
+    ]
+
+    if academic_level.lower() == 'masters':
+        headers.insert(3, 'no_of_electives')
+        # Add sample data for the new column
+        for i in range(len(sample_rows)):
+            sample_rows[i].insert(3, 2) # Default value for no_of_electives
+
+    ws.append(headers)
+
+    for row in sample_rows:
+        ws.append(row)
+
+    # Instruction sheet
+    notes = wb.create_sheet(title='INSTRUCTIONS')
+    notes.append(['Bulk Priority Upload Template Usage'])
+    notes.append(['1. Do not change header names.'])
+    notes.append(['2. Name, Roll Number, Email are required for identification.'])
+    notes.append(['3. At least Priority 1 and Priority 2 are required.'])
+    notes.append(['4. Remove example rows before uploading your real data.'])
+    notes.append(['5. Subject names must exactly match those configured for the selected semester & stream.'])
+    if academic_level.lower() == 'masters':
+        notes.append(['6. `no_of_electives` column is for Masters students to specify their desired number of electives.'])
+        notes.append(['7. Students will be assigned electives based on their priority and the number they specified.'])
+    else:
+        notes.append(['6. Students will be assigned 2 electives by default (can be changed in admin interface).'])
+
+
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = 'attachment; filename=priority_template.xlsx'
+    wb.save(response)
+    return response
+
+
 def extract_student_pref(file, semester, stream, batch):
     """
     Extract student preferences from Excel file
-    Expected format: Roll Number | Priority 1 | Priority 2 | Priority 3 | Priority 4 | Priority 5 | [Optional: no_of_electives]
+    Expected format: Name | Roll Number | Email | Priority 1 | Priority 2 | Priority 3 | Priority 4 | Priority 5
     Where priorities contain subject names, not numbers
     
-    The no_of_electives column is optional:
-    - If present, uses the specified number for each student (bounded between 1-5)
-    - If not present, defaults to 2 electives for all students
+    Also supports legacy format: Roll Number | Priority 1 | Priority 2 | Priority 3 | Priority 4 | Priority 5 | [Optional: no_of_electives]
     """
     try:
         # Read Excel file
         df = pd.read_excel(file)
         
-        # Define required columns (minimum needed)
-        required_columns = ['Roll Number', 'Priority 1', 'Priority 2']
+        # Check format - new format has Name and Email columns, legacy format does not
+        has_new_format = 'Name' in df.columns and 'Email' in df.columns
         
-        # Check if optional no_of_electives column exists
+        if has_new_format:
+            # New format validation
+            required_columns = ['Name', 'Roll Number', 'Email', 'Priority 1', 'Priority 2']
+        else:
+            # Legacy format validation
+            required_columns = ['Roll Number', 'Priority 1', 'Priority 2']
+        
+        # Check if optional no_of_electives column exists (legacy format only)
         has_no_of_electives = 'no_of_electives' in df.columns
+        
+        # Masters-specific validation: enforce presence of no_of_electives column
+        try:
+            level_name = semester.level.name if semester and hasattr(semester, 'level') else ''
+        except Exception:
+            level_name = ''
+        if level_name and 'masters' in level_name.lower() and not has_no_of_electives:
+            return {
+                'success': False,
+                'error': "Missing required column: no_of_electives. Masters uploads must include this column (see Masters template)."
+            }
         
         # Check if all required columns exist
         missing_columns = [col for col in required_columns if col not in df.columns]
@@ -124,19 +203,29 @@ def extract_student_pref(file, semester, stream, batch):
                 'success': False,
                 'error': 'Excel file is empty. Please add student data.'
             }
-        
-        # Get available subjects from database for the specified semester and stream
+          # Get available subjects from database for the specified semester and stream
         available_subjects = list(ElectiveSubject.objects.filter(
             elective_for=semester, 
             stream=stream
         ).values_list('subject_name', flat=True))
-          # Process each row
+        
+        # Process each row
         processed_count = 0
         errors = []
         
         for index, row in df.iterrows():
-            try:                # Extract data and apply comprehensive whitespace cleaning using helper function
+            try:
+                # Extract data and apply comprehensive whitespace cleaning using helper function
                 roll_number = clean_whitespace(row['Roll Number'])
+                
+                # Extract name and email if available (new format)
+                if has_new_format:
+                    name = clean_whitespace(row['Name'])
+                    email = clean_whitespace(row['Email'])
+                else:
+                    name = None
+                    email = None
+                
                 priority_1 = clean_whitespace(row['Priority 1'])
                 priority_2 = clean_whitespace(row['Priority 2'])
                 priority_3 = clean_whitespace(row['Priority 3'])
@@ -155,15 +244,24 @@ def extract_student_pref(file, semester, stream, batch):
                         no_of_electives = 2
                 else:
                     no_of_electives = 2
-                
-                # Validate roll number
+                  # Validate required fields
                 if not roll_number:
                     errors.append(f'Row {index + 2}: Roll Number is empty')
                     continue
+                    
+                if has_new_format:
+                    if not name:
+                        errors.append(f'Row {index + 2}: Name is empty')
+                        continue
+                    if not email:
+                        errors.append(f'Row {index + 2}: Email is empty')
+                        continue
+                        
                 if len(roll_number) < 6:  # Minimum length check
                     errors.append(f'Row {index + 2}: Invalid roll number format. Expected format: 079bct007')
                     continue
-                      # Collect priorities based on desired number of electives
+                
+                # Collect priorities based on desired number of electives
                 all_priorities = [priority_1, priority_2, priority_3, priority_4, priority_5]
                 priorities = []
                 
@@ -171,11 +269,12 @@ def extract_student_pref(file, semester, stream, batch):
                 for i in range(min(no_of_electives, len(all_priorities))):
                     if all_priorities[i]:  # clean_whitespace already handles nan and empty cases
                         priorities.append(all_priorities[i])
-                
-                # Ensure we have at least the desired number of non-empty priorities
+                  # Ensure we have at least the desired number of non-empty priorities
                 if len(priorities) < no_of_electives:
                     errors.append(f'Row {index + 2}: Student wants {no_of_electives} electives but only provided {len(priorities)} valid priorities')
-                    continue# Validate that subjects exist in database (flexible matching)
+                    continue
+                
+                # Validate that subjects exist in database (flexible matching)
                 invalid_subjects = []
                 matched_subjects = {}  # Store mapping of input to actual database subject
                 
@@ -214,10 +313,19 @@ def extract_student_pref(file, semester, stream, batch):
                 if len(set(priorities)) != len(priorities):
                     errors.append(f'Row {index + 2}: Duplicate subjects found. Each subject should appear only once.')
                     continue
-                
-                # Find student by roll number and save priorities
+                  # Find student by roll number and save priorities
                 try:
                     student = StudentProxyModel.objects.get(roll_number=roll_number)
+                    
+                    # If new format with name/email, validate these fields match the database
+                    if has_new_format:
+                        if name and student.name.strip().lower() != name.strip().lower():
+                            errors.append(f'Row {index + 2}: Name mismatch for roll number {roll_number}. Expected: "{student.name}", Got: "{name}"')
+                            continue
+                        if email and hasattr(student, 'email') and student.email and student.email.strip().lower() != email.strip().lower():
+                            errors.append(f'Row {index + 2}: Email mismatch for roll number {roll_number}. Expected: "{student.email}", Got: "{email}"')
+                            continue
+                    
                     print(f"Processing: {roll_number} (Student: {student.name})")
                     print(f"Priorities: {priorities}")
                     print(f"Desired number of electives: {no_of_electives}")
@@ -232,7 +340,8 @@ def extract_student_pref(file, semester, stream, batch):
                     for priority_index, subject_name in enumerate(priorities, 1):
                         # Use matched subject name from database
                         actual_subject_name = matched_subjects.get(subject_name, subject_name)
-                        subject = ElectiveSubject.objects.get(subject_name=actual_subject_name)
+                        # IMPORTANT: filter by semester/session and stream to avoid picking same-named subject from another context
+                        subject = ElectiveSubject.objects.get(subject_name=actual_subject_name, elective_for=semester, stream=stream)
                         ElectivePriority.objects.create(
                             student=student,
                             subject=subject,
@@ -240,6 +349,9 @@ def extract_student_pref(file, semester, stream, batch):
                             session=semester,  # Set the session/semester
                             desired_number_of_subjects=no_of_electives  # Use the extracted value
                         )
+                    # Debug: total priorities now
+                    from apps.student.models import ElectivePriority as EP
+                    print("Total priorities for", student.roll_number, EP.objects.filter(student=student, session=semester).count())
                     
                 except StudentProxyModel.DoesNotExist:
                     errors.append(f'Row {index + 2}: Student with roll number "{roll_number}" not found in database')

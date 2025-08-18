@@ -11,116 +11,83 @@
 <form method="post" enctype="multipart/form-data">
     {% csrf_token %}
     {{form.as_p}}
-    
-    <!-- Excel Upload Section -->
-    <div style="margin: 15px 0; padding: 10px; background-color: #f0f8ff; border: 1px solid #ddd; border-radius: 5px;">
-        <label for="excel_file" style="font-weight: bold;">📊 Upload Excel File:</label>
-        <input type="file" id="excel_file" name="excel_file" accept=".xlsx,.xls" style="margin: 5px;">
-        <button type="submit" name="_upload_excel" class="button" style="background-color: #4CAF50; color: white;">
-            📁 Upload Excel
-        </button>
+
+    <!-- Upload / Download Panel (original simplified) -->
+    <div style="display:flex; gap:18px; flex-wrap:wrap; margin:18px 0;">
+        <div style="flex:1 1 320px; min-width:300px; background:#ffffff; border:1px solid #e0e6ef; border-radius:8px; padding:16px; box-shadow:0 1px 2px rgba(0,0,0,.06);">
+            <h4 style="margin:0 0 12px; font-size:15px; font-weight:600; display:flex; align-items:center; gap:6px;">📤 Upload Filled Excel</h4>
+            <p style="margin:0 0 10px; font-size:12px; color:#555;">Select the completed priority Excel file and click Upload.</p>
+            <input type="file" id="excel_file" name="excel_file" accept=".xlsx,.xls" style="margin-bottom:10px; width:100%;">
+            <button type="submit" name="_upload_excel" class="button" style="background:#2e7d32; color:#fff; width:100%;">📁 Upload Excel</button>
+        </div>
+        <div style="flex:1 1 320px; min-width:300px; background:#ffffff; border:1px solid #e0e6ef; border-radius:8px; padding:16px; box-shadow:0 1px 2px rgba(0,0,0,.06);">
+            <h4 style="margin:0 0 12px; font-size:15px; font-weight:600; display:flex; align-items:center; gap:6px;">📥 Download Sample Templates</h4>
+            <p style="margin:0 0 14px; font-size:12px; color:#555;">Choose the appropriate academic level template to start.</p>
+            <div style="display:flex; flex-direction:column; gap:8px;">
+                <a href="{% url 'download_priority_template' 'bachelors' %}" class="button" style="background:#1565c0; color:#fff; text-align:center;">⬇️ Bachelors Template</a>
+                <a href="{% url 'download_priority_template' 'masters' %}" class="button" style="background:#6a1b9a; color:#fff; text-align:center;">⬇️ Masters Template</a>
+            </div>
+        </div>
     </div>
-    
-    <button class="button" type="submit" name="_get_formset"> Enter Priorities</button>
+
+    <button class="button" type="submit" name="_get_formset">Enter Priorities</button>
     <br>
-    
-    <!-- Move message display here - outside of has_data condition -->
+
     {% if message %}
-    <div style="margin: 10px 0; padding: 10px; background-color: #d4edda; border: 1px solid #c3e6cb; color: #155724; border-radius: 5px;">
-        <strong>✅ {{ message }}</strong>
-    </div>
+    <div style="margin: 12px 0; padding: 10px; background-color:#d4edda; border:1px solid #c3e6cb; color:#155724; border-radius:5px; font-size:13px;">{{ message }}</div>
     {% endif %}
-    
+
     {% if has_data %}
-    {% trans 'Here are the subjects for selected semester' %}
-    {% for subject in elective_subjects %}
-    <br>
-    {{forloop.counter}}) {{subject}}
-    {% endfor %}
-    <br>
-    <h3>
-        {% if form_data.enter_from_text %}
-        {% trans 'Enter the priority selections by students separated by spaces ' %}
-        {% else %}
-        {% trans 'Select the priority from the drop down' %}
-        {% endif %}
-    </h3>
-    
-    {% if not is_success %}
-    {{ formset.management_form }}
-    <table id="formset" class="form">
-        {% for form in formset.forms %}
-        {{ form.non_field_errors }}
-        {% if forloop.first %}
-        <thead>
-        <tr>
-            {% for field in form.visible_fields %}
-            <th>{{ field.label|capfirst }}</th>
-            {% endfor %}
-        </tr>
-        </thead>
-        {% endif %}
-
-        <tr class="{% cycle row1 row2 %}">
-            {% for field in form.visible_fields %}
-            <td>
-                {# Include the hidden fields in the form #}
-                {% if forloop.first %}
-                {{ form.non_field_errors }}
-                {% for hidden in form.hidden_fields %}
-                {{ hidden }}
+        {% trans 'Here are the subjects for selected semester' %}
+        {% for subject in elective_subjects %}<br>{{forloop.counter}}) {{subject}}{% endfor %}
+        <br>
+        <h3 style="margin-top:14px;">
+            {% if form_data.enter_from_text %}{% trans 'Enter the priority selections by students separated by spaces ' %}{% else %}{% trans 'Select the priority from the drop down' %}{% endif %}
+        </h3>
+        {% if not is_success %}
+            {{ formset.management_form }}
+            <table id="formset" class="form">
+                {% for form in formset.forms %}
+                    {{ form.non_field_errors }}
+                    {% if forloop.first %}
+                        <thead><tr>{% for field in form.visible_fields %}<th>{{ field.label|capfirst }}</th>{% endfor %}</tr></thead>
+                    {% endif %}
+                    <tr class="{% cycle row1 row2 %}">
+                        {% for field in form.visible_fields %}
+                            <td>
+                                {% if forloop.first %}
+                                    {{ form.non_field_errors }}
+                                    {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
+                                {% endif %}
+                                {{ field.errors }}
+                                {{ field }}
+                            </td>
+                        {% endfor %}
+                    </tr>
                 {% endfor %}
-                {% endif %}
-                {{ field.errors }}
-                {{ field }}
-            </td>
-            {% endfor %}
-        </tr>
-        {% endfor %}
-    </table>
-
-    <button type="submit" class="button" name="_post_priorities"> Submit</button>
-    {% endif %}
+            </table>
+            <button type="submit" class="button" name="_post_priorities">Submit</button>
+        {% endif %}
     {% endif %}
 </form>
 
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
 <script>
-$("#id_level").click(function () {
+$(function(){
+    $('#id_level').on('change', function(){
         var academic_level_id = $(this).val();
-        $.ajax({
-            url: '{% url "get-faculty-according-to-level" %}',
-            data: {
-                'academic_level_id': academic_level_id,
-            },
-            success: function (response) {
-                var  new_options = response;
-                $('#id_stream').empty();
-                $.each(new_options, function(key, value) {
-                    $('#id_stream')
-                        .append($('<option>', { value : value.value })
-                        .text(value.display_text));
-                });
-            }
-    });
-});
-
-$("#id_level").click(function () {
-        var academic_level_id = $(this).val();
-        $.ajax({
-            url: '{% url "get-semester-according-to-level" %}',
-            data: {
-                'academic_level_id': academic_level_id,
-            },
-            success: function (response) {
-                var  new_options = response;
-                $('#id_semester').empty();
-                $.each(new_options, function(key, value) {
-                    $('#id_semester')
-                        .append($('<option>', { value : value.value })
-                        .text(value.display_text));
-                });
-            }
+        $.get('{% url "get-faculty-according-to-level" %}', {academic_level_id: academic_level_id}, function(response){
+            $('#id_stream').empty();
+            $.each(response, function(_, v){
+                $('#id_stream').append($('<option>', {value: v.value}).text(v.display_text));
+            });
+        });
+        $.get('{% url "get-semester-according-to-level" %}', {academic_level_id: academic_level_id}, function(response){
+            $('#id_semester').empty();
+            $.each(response, function(_, v){
+                $('#id_semester').append($('<option>', {value: v.value}).text(v.display_text));
+            });
+        });
     });
 });
 </script>
