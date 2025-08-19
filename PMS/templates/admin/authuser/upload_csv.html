@@ -1,5 +1,10 @@
 {% extends 'admin/base_site.html' %}
 {% block content %}
+<!-- Added CSV sample download link -->
+<div style="margin:15px 0; padding:12px; background:#e7f3ff; border:1px solid #339af0; border-radius:6px;">
+  <strong>Download Student CSV Sample:</strong>
+  <a href="{% url 'download_student_sample_csv' %}" class="button" style="margin-left:10px; background:#6f42c1; color:#fff; text-decoration:none; padding:6px 12px; border-radius:4px;">📄 Sample CSV</a>
+</div>
 <form method="post" enctype="multipart/form-data">
     {% csrf_token %}
     {{form.as_p}}
@@ -29,10 +34,6 @@ $("#id_academic_level").click(function () {
             }
     });
     });
-
-
-
-
 
 </script>
 {% endblock %}
