@@ -140,22 +140,62 @@ def get_object_index(queryset, object):
 
 
 def get_normalized_result_from_dataframe(result_df):
-    """Normalize allocation DataFrame (index=subjects, columns=roll numbers) for template rendering."""
-    if result_df is None or result_df.empty:
+    """Normalize allocation DataFrame (index=subjects, columns=roll numbers) for template rendering.
+    Can also handle dictionary result from algorithm's prepare_output_format method."""
+    if result_df is None:
         return []
+
     from apps.authuser.models import StudentProxyModel
-    roll_numbers = [c for c in result_df.columns if not str(c).startswith('Unnamed') and c != 'number_of_students']
-    students_map = {s.roll_number: s for s in StudentProxyModel.objects.filter(roll_number__in=roll_numbers)}
     normalized = []
-    for subject in result_df.index:
-        assigned_rolls = [rn for rn in roll_numbers if result_df.at[subject, rn] == 1]
-        students = [students_map[rn] for rn in assigned_rolls if rn in students_map]
-        count = len(students)
-        normalized.append({
-            'subject_name': subject,
-            'students': students,
-            'student_count': count,
-            'student_count_1': count + 1,
-            'row_count': 1 if count == 0 else count
-        })
+    
+    # Handle the case when result_df is a dictionary (from prepare_output_format)
+    if isinstance(result_df, dict):
+        if not result_df:  # Check if dictionary is empty
+            return []
+        
+        # Get all roll numbers from all subjects
+        roll_numbers = []
+        for subject, rolls in result_df.items():
+            roll_numbers.extend(rolls)
+        roll_numbers = list(set(roll_numbers))  # Remove duplicates
+        
+        # Create a mapping of roll numbers to student objects
+        students_map = {s.roll_number: s for s in StudentProxyModel.objects.filter(roll_number__in=roll_numbers)}
+        
+        # Process each subject and its assigned students
+        for subject, assigned_rolls in result_df.items():
+            students = [students_map[rn] for rn in assigned_rolls if rn in students_map]
+            count = len(students)
+            normalized.append({
+                'subject_name': subject,
+                'students': students,
+                'student_count': count,
+                'student_count_1': count + 1,
+                'row_count': 1 if count == 0 else count
+            })
+    
+    # Handle DataFrame case
+    elif hasattr(result_df, 'empty'):
+        if result_df.empty:
+            return []
+            
+        # Extract roll numbers from DataFrame columns
+        roll_numbers = [c for c in result_df.columns if not str(c).startswith('Unnamed') and c != 'number_of_students']
+        
+        # Create a mapping of roll numbers to student objects
+        students_map = {s.roll_number: s for s in StudentProxyModel.objects.filter(roll_number__in=roll_numbers)}
+        
+        # Process each subject and its assigned students
+        for subject in result_df.index:
+            assigned_rolls = [rn for rn in roll_numbers if result_df.at[subject, rn] == 1]
+            students = [students_map[rn] for rn in assigned_rolls if rn in students_map]
+            count = len(students)
+            normalized.append({
+                'subject_name': subject,
+                'students': students,
+                'student_count': count,
+                'student_count_1': count + 1,
+                'row_count': 1 if count == 0 else count
+            })
+    
     return normalized
