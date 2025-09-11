@@ -29,11 +29,11 @@ class GenericAlgorithm:
         from apps.authuser.models import StudentProxyModel
         try:
             student = StudentProxyModel.objects.filter(roll_number=student_identifier, batch=self.batch, stream=self.stream).first()
-            if student and student.level and student.level.name:
-                return 'masters' in student.level.name.lower()
-            return False
-        except Exception:
-            return False
+            if student and student.academic_level and student.academic_level.name.lower().startswith('master'):
+                return True
+        except Exception as e:
+            print(f"Error checking masters: {e}")
+        return False
 
     def get_desired_number_of_subjects_for_student(self, student_identifier):
         """Use roll_number; masters get count of their priority selections; others use desired_number_of_subjects or default 2."""
@@ -43,6 +43,7 @@ class GenericAlgorithm:
                 session=self.semester
             ).count()
             return actual_selections if actual_selections > 0 else 1
+        
         priority_entry = ElectivePriority.objects.filter(
             student__roll_number=student_identifier,
             session=self.semester
@@ -50,24 +51,35 @@ class GenericAlgorithm:
         if priority_entry and priority_entry.desired_number_of_subjects:
             return priority_entry.desired_number_of_subjects
         return 2
-
+        
     def arrange_df_according_to_priority_sum(self):
-        """Sort subjects by total priority score with consistent ordering using subject name as tiebreaker."""
+        """Sort subjects by total priority score with consistent ordering"""
+        # Calculate priority sums for each subject (row)
         priority_sum = []
         for i in range(0, len(self.subjects_list_in_order)):
             row_sum = self.df_of_priorities.iloc[i].sum(skipna=True)
             priority_sum.append(row_sum)
-        self.df_of_priorities['priority_sum'] = priority_sum
-        # Add secondary sort by index name to ensure consistent order across systems
-        self.df_of_priorities = self.df_of_priorities.sort_values(['priority_sum', self.df_of_priorities.index])
-        self.df_of_priorities.pop('priority_sum')
+        
+        # Create a new DataFrame for sorting to avoid modifying the original index
+        sort_df = pd.DataFrame({
+            'priority_sum': priority_sum,
+            'subject_name': self.df_of_priorities.index.astype(str)
+        }, index=self.df_of_priorities.index)
+        
+        # Get the sorted index
+        sorted_index = sort_df.sort_values(['priority_sum', 'subject_name']).index
+        
+        # Reindex the original dataframe using the sorted index
+        self.df_of_priorities = self.df_of_priorities.reindex(sorted_index)
+        
         return self.df_of_priorities
 
     def is_subject_at_capacity(self, subject_index):
         """Capacity enforcement disabled (always False)."""
         return False
 
-    def insert_from_priority_to_result(self):
+    def allocate_subjects_to_students(self):
+        """Assign subjects to students based on priority."""
         self.df_of_priorities = self.arrange_df_according_to_priority_sum()
         student_columns = [col for col in self.df_of_priorities.columns
                            if col not in ['number_of_students', 'priority_sum'] and not str(col).startswith('Unnamed')]
@@ -75,12 +87,16 @@ class GenericAlgorithm:
         for index in self.result_df.index:
             for column in self.result_df.columns:
                 self.result_df.at[index, column] = 0
+                
         for column in student_columns:
             student_priorities = self.df_of_priorities[column].dropna()
             if student_priorities.empty:
                 continue
-            student_priorities = student_priorities.sort_values()
+                
+            # Sort indices based on priority values for deterministic ordering
             indices = student_priorities.index.to_list()
+            indices.sort(key=lambda x: (student_priorities[x], str(x)))
+            
             desired_subject_count = self.get_desired_number_of_subjects_for_student(column)
             assigned_count = 0
             for subject_index in indices:
@@ -90,13 +106,16 @@ class GenericAlgorithm:
                     if not self.is_subject_at_capacity(subject_index):
                         self.result_df.at[subject_index, column] = 1
                         assigned_count += 1
-
+                        
     def arrange_priority_for_a_particular_student(self, student):
         student_priorities = self.df_of_priorities[student].dropna()
         if student_priorities.empty:
             return
-        student_priorities = student_priorities.sort_values()
+            
+        # Sort indices based on priority values with consistent secondary sort on index string
         indices = student_priorities.index.to_list()
+        indices.sort(key=lambda x: (student_priorities[x], str(x)))
+        
         for subject_index in indices:
             if not pd.isna(self.df_of_priorities.at[subject_index, student]) and not self.is_subject_at_capacity(subject_index):
                 if self.result_df.at[subject_index, student] == 0:
@@ -143,9 +162,15 @@ class GenericAlgorithm:
             return
         if student not in self.df_of_priorities.columns:
             return
-        # Use a separate copy of priorities (original order) without altering df values to determine preference order
-        student_priorities = self.df_of_priorities[student].dropna().sort_values()
-        for subject_index in student_priorities.index:
+            
+        # Use a separate copy of priorities without altering df values to determine preference order
+        student_priorities = self.df_of_priorities[student].dropna()
+        
+        # Sort indices based on priority values with consistent secondary sort on index string
+        sorted_indices = student_priorities.index.to_list()
+        sorted_indices.sort(key=lambda x: (student_priorities[x], str(x)))
+        
+        for subject_index in sorted_indices:
             if subject_index in excluded_subjects:
                 continue
             if subject_index not in self.result_df.index:
@@ -180,54 +205,62 @@ class GenericAlgorithm:
             passes += 1
             for student in self.result_df.columns:
                 desired = self.get_desired_number_of_subjects_for_student(student)
-                current = sum(self.result_df.at[subj, student] == 1 for subj in self.result_df.index)
+                current = sum(self.result_df[student])
                 if current < desired:
-                    before = current
-                    self.reassign_student(student)
-                    after = sum(self.result_df.at[subj, student] == 1 for subj in self.result_df.index)
-                    current = after
-                    if current < desired:
-                        assign_any_available(student, desired - current)
-                        after2 = sum(self.result_df.at[subj, student] == 1 for subj in self.result_df.index)
-                        if after2 > before:
-                            changed = True
-                    elif after > before:
+                    old_current = current
+                    assign_any_available(student, desired - current)
+                    new_current = sum(self.result_df[student])
+                    if new_current > old_current:
                         changed = True
 
-    def run(self):
-        from apps.course.views import get_cached_allocation
-        # Temporarily bypass cache during development
-        # cached_result = get_cached_allocation(self.batch.pk, self.semester.pk, self.stream.pk)
-        # if cached_result is not None:
-        #     self.result_df = cached_result
-        #     return self.result_df
+    def balance_subject_loads(self):
+        """Attempt to balance subject loads by reassigning students from overloaded subjects to preferences."""
+        pass  # Disabled for now - only minimum threshold enforced
+    
+    def prepare_output_format(self):
+        """Add numeric summary columns before returning result."""
+        if self.result_df is None:
+            return {}
+            
+        # Add counts
+        self.result_df['number_of_students'] = self.result_df.sum(axis=1, numeric_only=True)
         
-        self.insert_from_priority_to_result()
-        # Masters flexible assignment now that detection works with roll numbers
-        self.allocate_masters_students_flexibly()
-        
-        # Check if min_student is set sensibly before applying elimination
-        total_students = len(self.result_df.columns) if self.result_df is not None else 0
-        if self.minimum_subject_threshold > total_students:
-            print(f"Warning: min_student threshold ({self.minimum_subject_threshold}) exceeds total student count ({total_students})!")
-            if total_students > 0:
-                # Adjust to realistic value if needed (80% of students)
-                self.minimum_subject_threshold = max(1, int(total_students * 0.8))
-                print(f"Adjusting to more realistic threshold: {self.minimum_subject_threshold}")
-        
-        for _ in range(0, len(self.subjects_list_in_order)):
-            self.start_eliminating_from_bottom()
-        # Final pass to fill remaining desired slots
-        self.fill_remaining_assignments()
-        self.display_result()
-        return self.result_df
+        # Prepare output - convert to dict format {subject_name: [roll_numbers]}
+        result = dict()
+        for subject in self.result_df.index:
+            result[subject] = []
+            for column in self.result_df.columns:
+                if column != 'number_of_students' and self.result_df.at[subject, column] == 1:
+                    result[subject].append(column)
+        return result
+    
+    def run_allocation_cycle(self):
+        """Execute the complete allocation algorithm."""
+        if not self.df_of_priorities.empty:
+            # Phase 1: Initial allocation by priority
+            self.allocate_subjects_to_students()
 
-    def display_result(self):
-        """Add simple output info for debugging."""
-        if self.result_df is not None and not self.result_df.empty:
+            # Phase 2: Adjust minimum thresholds - eliminate underfilled subjects
+            # Validate threshold against student count - adjust if unreasonable
+            total_students = len(self.result_df.columns)
+            if self.minimum_subject_threshold > total_students:
+                # If threshold exceeds students, use 80% of student count
+                self.minimum_subject_threshold = max(1, int(total_students * 0.8))
+                print(f"Adjusted threshold to {self.minimum_subject_threshold} for {total_students} students")
+                
+            # Eliminate subjects below threshold
+            self.start_eliminating_from_bottom()
+            
+            # Phase 3: Masters students special handling
+            self.allocate_masters_students_flexibly()
+            
+            # Phase 4: Fill any remaining required assignments
+            self.fill_remaining_assignments()
+
+            # Debug statistics
+            subject_count = len(self.result_df.index)
             student_count = len(self.result_df.columns)
-            subject_count = len(self.result_df.index) 
-            total_assignments = self.result_df.sum().sum()
+            total_assignments = self.result_df.sum().sum() - self.result_df['number_of_students'].sum() if 'number_of_students' in self.result_df else self.result_df.sum().sum()
             print(f"Final allocation: {subject_count} subjects for {student_count} students, {total_assignments} total assignments")
 
     def allocate_masters_students_flexibly(self):
@@ -236,8 +269,14 @@ class GenericAlgorithm:
         for student in masters_students:
             if student not in self.df_of_priorities.columns:
                 continue
-            student_priorities = self.df_of_priorities[student].dropna().sort_values()
-            for subject_index in student_priorities.index:
+                
+            student_priorities = self.df_of_priorities[student].dropna()
+            
+            # Sort indices based on priority values with consistent secondary sort on index string
+            sorted_indices = student_priorities.index.to_list()
+            sorted_indices.sort(key=lambda x: (student_priorities[x], str(x)))
+            
+            for subject_index in sorted_indices:
                 if subject_index not in self.result_df.index:
                     continue
                 if self.result_df.at[subject_index, student] == 0:
