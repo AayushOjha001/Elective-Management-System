@@ -14,7 +14,10 @@ class GenericAlgorithm:
             self.result_df = pd.DataFrame()
             self.subjects_list_in_order = []
             return
-        self.minimum_subject_threshold = semester.min_student
+        # Get minimum threshold with fallback to 2 if not set
+        self.minimum_subject_threshold = getattr(semester, 'min_student', 2)
+        if not self.minimum_subject_threshold or self.minimum_subject_threshold <= 0:
+            self.minimum_subject_threshold = 2
         self.result_df = None
         self.subjects_list_in_order = self.df_of_priorities.index
         # Placeholder dicts retained for potential future per-subject constraints
@@ -49,12 +52,14 @@ class GenericAlgorithm:
         return 2
 
     def arrange_df_according_to_priority_sum(self):
+        """Sort subjects by total priority score with consistent ordering using subject name as tiebreaker."""
         priority_sum = []
         for i in range(0, len(self.subjects_list_in_order)):
             row_sum = self.df_of_priorities.iloc[i].sum(skipna=True)
             priority_sum.append(row_sum)
         self.df_of_priorities['priority_sum'] = priority_sum
-        self.df_of_priorities = self.df_of_priorities.sort_values('priority_sum')
+        # Add secondary sort by index name to ensure consistent order across systems
+        self.df_of_priorities = self.df_of_priorities.sort_values(['priority_sum', self.df_of_priorities.index])
         self.df_of_priorities.pop('priority_sum')
         return self.df_of_priorities
 
@@ -101,11 +106,13 @@ class GenericAlgorithm:
     def start_eliminating_from_bottom(self):
         """Eliminate underfilled subjects and reassign affected students to next priorities."""
         subjects_to_drop = []
+        # First identify all empty or underfilled subjects
         for index in list(self.result_df.index):
             current_assigned = sum(self.result_df.loc[index])
             if current_assigned == 0:
                 subjects_to_drop.append(index)
-            elif current_assigned < self.minimum_subject_threshold:
+            # Only eliminate underfilled subjects if min threshold is specified and >0
+            elif self.minimum_subject_threshold > 0 and current_assigned < self.minimum_subject_threshold:
                 # collect students to reassign
                 students_to_reassign = [col for col in self.result_df.columns if self.result_df.at[index, col] == 1]
                 # clear assignments for this subject
@@ -115,6 +122,12 @@ class GenericAlgorithm:
                 # reassign each student
                 for student in students_to_reassign:
                     self.reassign_student(student, excluded_subjects=subjects_to_drop)
+        
+        # Debug info
+        if subjects_to_drop:
+            print(f"Eliminating {len(subjects_to_drop)} subjects: {subjects_to_drop}")
+            print(f"Min threshold: {self.minimum_subject_threshold}")
+            
         # actually drop after processing to keep indexes available during reassignment
         for subj in subjects_to_drop:
             if subj in self.result_df.index:
@@ -183,13 +196,25 @@ class GenericAlgorithm:
 
     def run(self):
         from apps.course.views import get_cached_allocation
-        cached_result = get_cached_allocation(self.batch.pk, self.semester.pk, self.stream.pk)
-        if cached_result is not None:
-            self.result_df = cached_result
-            return self.result_df
+        # Temporarily bypass cache during development
+        # cached_result = get_cached_allocation(self.batch.pk, self.semester.pk, self.stream.pk)
+        # if cached_result is not None:
+        #     self.result_df = cached_result
+        #     return self.result_df
+        
         self.insert_from_priority_to_result()
         # Masters flexible assignment now that detection works with roll numbers
         self.allocate_masters_students_flexibly()
+        
+        # Check if min_student is set sensibly before applying elimination
+        total_students = len(self.result_df.columns) if self.result_df is not None else 0
+        if self.minimum_subject_threshold > total_students:
+            print(f"Warning: min_student threshold ({self.minimum_subject_threshold}) exceeds total student count ({total_students})!")
+            if total_students > 0:
+                # Adjust to realistic value if needed (80% of students)
+                self.minimum_subject_threshold = max(1, int(total_students * 0.8))
+                print(f"Adjusting to more realistic threshold: {self.minimum_subject_threshold}")
+        
         for _ in range(0, len(self.subjects_list_in_order)):
             self.start_eliminating_from_bottom()
         # Final pass to fill remaining desired slots
@@ -198,8 +223,12 @@ class GenericAlgorithm:
         return self.result_df
 
     def display_result(self):
-        # Silent placeholder
-        pass
+        """Add simple output info for debugging."""
+        if self.result_df is not None and not self.result_df.empty:
+            student_count = len(self.result_df.columns)
+            subject_count = len(self.result_df.index) 
+            total_assignments = self.result_df.sum().sum()
+            print(f"Final allocation: {subject_count} subjects for {student_count} students, {total_assignments} total assignments")
 
     def allocate_masters_students_flexibly(self):
         """Assign all selected subjects to masters students (capacity disabled) using roll numbers without mutating priority values."""
