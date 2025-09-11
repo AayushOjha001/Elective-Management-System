@@ -60,17 +60,20 @@ class GenericAlgorithm:
             row_sum = self.df_of_priorities.iloc[i].sum(skipna=True)
             priority_sum.append(row_sum)
         
-        # Create a new DataFrame for sorting to avoid modifying the original index
-        sort_df = pd.DataFrame({
-            'priority_sum': priority_sum,
-            'subject_name': self.df_of_priorities.index.astype(str)
-        }, index=self.df_of_priorities.index)
+        # Create a new column for priority sum
+        self.df_of_priorities['priority_sum'] = priority_sum
         
-        # Get the sorted index
-        sorted_index = sort_df.sort_values(['priority_sum', 'subject_name']).index
+        # Create a new column for subject name as string to use as secondary sort key
+        self.df_of_priorities['subject_name'] = self.df_of_priorities.index.astype(str)
         
-        # Reindex the original dataframe using the sorted index
-        self.df_of_priorities = self.df_of_priorities.reindex(sorted_index)
+        # Sort using the two columns
+        sorted_df = self.df_of_priorities.sort_values(['priority_sum', 'subject_name'])
+        
+        # Remove temporary columns
+        sorted_df = sorted_df.drop(columns=['priority_sum', 'subject_name'])
+        
+        # Return the sorted dataframe
+        self.df_of_priorities = sorted_df
         
         return self.df_of_priorities
 
@@ -197,6 +200,7 @@ class GenericAlgorithm:
                     break
                 self.result_df.at[subj, student] = 1
                 needed -= 1
+        
         changed = True
         max_passes = 5
         passes = 0
@@ -282,3 +286,14 @@ class GenericAlgorithm:
                 if self.result_df.at[subject_index, student] == 0:
                     self.result_df.at[subject_index, student] = 1
         return True
+        
+    # Legacy method name for backward compatibility
+    def run(self):
+        """Legacy entry point - runs allocation and returns output."""
+        self.run_allocation_cycle()
+        return self.prepare_output_format()
+
+    # Legacy method name for backward compatibility 
+    def insert_from_priority_to_result(self):
+        """Legacy method name for allocate_subjects_to_students."""
+        return self.allocate_subjects_to_students()
