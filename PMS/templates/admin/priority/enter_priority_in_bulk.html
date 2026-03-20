@@ -13,31 +13,35 @@
     {{form.as_p}}
     
     <!-- Excel Upload Section -->
-    <div style="margin: 15px 0; padding: 10px; background-color: #f0f8ff; border: 1px solid #ddd; border-radius: 5px;">
-        <label for="excel_file" style="font-weight: bold;">📊 Upload Excel File:</label>
-        <input type="file" id="excel_file" name="excel_file" accept=".xlsx,.xls" style="margin: 5px;">
-        <button type="submit" name="_upload_excel" class="button" style="background-color: #4CAF50; color: white;">
-            📁 Upload Excel
-        </button>
+    <fieldset class="module aligned" style="margin: 15px 0;">
+        <h2>Upload Excel File</h2>
+        <div class="form-row">
+            <label for="excel_file">Excel File:</label>
+            <input type="file" id="excel_file" name="excel_file" accept=".xlsx,.xls">
+            <input type="submit" name="_upload_excel" value="Upload Excel" class="default">
+        </div>
+    </fieldset>
+    
+    <div class="submit-row">
+        <input class="default" type="submit" name="_get_formset" value="Enter Priorities">
     </div>
     
-    <button class="button" type="submit" name="_get_formset"> Enter Priorities</button>
-    <br>
-    
-    <!-- Move message display here - outside of has_data condition -->
     {% if message %}
-    <div style="margin: 10px 0; padding: 10px; background-color: #d4edda; border: 1px solid #c3e6cb; color: #155724; border-radius: 5px;">
-        <strong>✅ {{ message }}</strong>
-    </div>
+    <ul class="messagelist">
+        <li class="{% if is_success %}success{% else %}warning{% endif %}">{{ message }}</li>
+    </ul>
     {% endif %}
     
     {% if has_data %}
-    {% trans 'Here are the subjects for selected semester' %}
-    {% for subject in elective_subjects %}
-    <br>
-    {{forloop.counter}}) {{subject}}
-    {% endfor %}
-    <br>
+    <fieldset class="module aligned">
+        <h2>{% trans 'Subjects for selected semester' %}</h2>
+        <div style="padding: 8px;">
+        {% for subject in elective_subjects %}
+            {{forloop.counter}}) {{subject}}<br>
+        {% endfor %}
+        </div>
+    </fieldset>
+
     <h3>
         {% if form_data.enter_from_text %}
         {% trans 'Enter the priority selections by students separated by spaces ' %}
@@ -79,7 +83,9 @@
         {% endfor %}
     </table>
 
-    <button type="submit" class="button" name="_post_priorities"> Submit</button>
+    <div class="submit-row">
+        <input type="submit" class="default" name="_post_priorities" value="Submit">
+    </div>
     {% endif %}
     {% endif %}
 </form>

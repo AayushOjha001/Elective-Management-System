@@ -47,25 +47,15 @@ class GenericAlgorithm:
     def get_desired_number_of_subjects_for_student(self, student):
         """
         Get the desired number of subjects for a student.
-        For Masters students: return the actual number of subjects they selected (flexible)
-        For Bachelor students: return the configured desired_number_of_subjects or default to 2
+        Uses the configured desired_number_of_subjects from the database.
+        Defaults to 3 for Masters students and 2 for non-Masters students.
         """
-        # Check if this is a Masters student
-        if self.is_masters_student(student):
-            # For Masters students, return the actual number of subjects they selected
-            actual_selections = ElectivePriority.objects.filter(
-                student__name=student, 
-                session=self.semester
-            ).count()
-            return actual_selections if actual_selections > 0 else 1
-        
-        # For non-Masters students, use the original logic
         priority_entry = ElectivePriority.objects.filter(student__name=student,
                                                session=self.semester).first()
         if priority_entry and priority_entry.desired_number_of_subjects:
             return priority_entry.desired_number_of_subjects
-        
-        return 2
+
+        return 3 if self.is_masters_student(student) else 2
 
     def arrange_df_according_to_priority_sum(self):
         priority_sum = []
@@ -139,22 +129,42 @@ class GenericAlgorithm:
             
         student_priorities = student_priorities.sort_values()
         indices = student_priorities.index.to_list()
-          # Find the first subject that hasn't reached capacity and student has selected
+        # Find the first subject that still exists, hasn't reached capacity, and student has selected
         for subject_index in indices:
+            # Skip subjects that have been eliminated from the results
+            if subject_index not in self.result_df.index:
+                continue
             if not pd.isna(self.df_of_priorities.at[subject_index, student]) and not self.is_subject_at_capacity(subject_index):
                 self.result_df.at[subject_index, student] = 1
                 self.df_of_priorities.at[subject_index, student] = 999
                 break
     
     def start_eliminating_from_bottom(self):
-        for index in reversed(self.result_df.index):
-            if sum(self.result_df.loc[index]) == 0:
+        eliminated_any = False
+        # Use .tolist() to avoid modifying the index while iterating
+        for index in reversed(self.result_df.index.tolist()):
+            current_count = int(sum(self.result_df.loc[index]))
+            min_required = self.min_students_per_subject.get(index, 0)
+
+            if current_count == 0:
                 self.result_df = self.result_df.drop(index)
-            elif sum(self.result_df.loc[index]) < self.min_students_per_subject.get(index, 0):
+                eliminated_any = True
+            elif current_count < min_required:
+                # Collect students to reassign BEFORE dropping the row
+                students_to_reassign = []
                 for column in self.result_df.columns:
-                    if self.result_df.at[index, column]:
-                        self.result_df.at[index, column] = 0
-                        self.arrange_priority_for_a_particular_student(column)
+                    if self.result_df.at[index, column] == 1:
+                        students_to_reassign.append(column)
+
+                # Drop the subject row FIRST — prevents reassignment back to it
+                self.result_df = self.result_df.drop(index)
+                eliminated_any = True
+
+                # Now reassign displaced students to remaining viable subjects
+                for student in students_to_reassign:
+                    self.arrange_priority_for_a_particular_student(student)
+
+        return eliminated_any
 
     def run(self):
         # Check if we have cached data first
@@ -164,14 +174,14 @@ class GenericAlgorithm:
         if cached_result is not None:
             self.result_df = cached_result
             return self.result_df
-          # If no cached data, run the normal algorithm
+        # If no cached data, run the normal algorithm
         self.insert_from_priority_to_result()
         
-        # After initial allocation, apply specialized Masters student allocation
-        self.allocate_masters_students_flexibly()
-        
-        for i in range(0, len(self.subjects_list_in_order)):
-            self.start_eliminating_from_bottom()
+        # Run elimination passes until no more subjects are eliminated (convergence)
+        max_iterations = len(self.subjects_list_in_order) * 2  # Safety limit
+        for i in range(max_iterations):
+            if not self.start_eliminating_from_bottom():
+                break
         self.display_result()
         return self.result_df
 

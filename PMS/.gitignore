@@ -9,10 +9,13 @@
 pms_db.sqlite3
 
 # Python cache
-__pycache__/
+
+**/__pycache__/
 *.pyc
 *.pyo
 *.pyd
+**/migrations/__pycache__/
+./apps/__pycache__/
 
 # Django static and media files
 /staticfiles/

@@ -1,5 +1,6 @@
 from django.template.response import TemplateResponse
 import pandas as pd
+import re
 from apps.authuser.models import StudentProxyModel
 from apps.course.forms import PriorityEntryDetailFormset
 from apps.course.models import ElectiveSubject
@@ -76,22 +77,68 @@ def enter_priority_in_bulk(request, *args, **kwargs):
 def extract_student_pref(file, semester, stream, batch):
     """
     Extract student preferences from Excel file
-    Expected format: Roll Number | Priority 1 | Priority 2 | Priority 3 | Priority 4 | Priority 5
-    Where priorities contain subject names, not numbers
+    Supports flexible headers and priority columns (Priority 1..N).
+    For masters students, if desired electives column is missing/empty, defaults to 3.
+    For non-masters students, default remains 2.
     """
     try:
+        def _normalize_text(value):
+            text = '' if value is None else str(value)
+            text = re.sub(r'\s+', ' ', text).strip()
+            return text
+
+        def _normalize_key(value):
+            return _normalize_text(value).lower()
+
+        def _normalize_subject(value):
+            # Handles entries like: "Quantum Computing (Dr. ... )"
+            text = _normalize_text(value)
+            text = re.sub(r'\([^)]*\)', '', text)
+            text = re.sub(r'\s+', ' ', text).strip().lower()
+            return text
+
+        def _find_column(df_columns, aliases):
+            normalized = {_normalize_key(col): col for col in df_columns}
+            for alias in aliases:
+                alias_key = _normalize_key(alias)
+                if alias_key in normalized:
+                    return normalized[alias_key]
+            return None
+
         # Read Excel file
         df = pd.read_excel(file)
-        
-        # Define required columns
-        required_columns = ['Roll Number', 'Priority 1', 'Priority 2', 'Priority 3', 'Priority 4', 'Priority 5']
-        
-        # Check if all required columns exist
-        missing_columns = [col for col in required_columns if col not in df.columns]
-        if missing_columns:
+
+        # Detect columns in a flexible way
+        roll_number_column = _find_column(df.columns, [
+            'Roll Number', 'Roll No', 'Roll No.', 'Roll', 'Symbol Number', 'Student ID'
+        ])
+        if not roll_number_column:
             return {
                 'success': False,
-                'error': f'Missing required columns: {", ".join(missing_columns)}. Required columns are: {", ".join(required_columns)}'
+                'error': 'Could not find a roll number column. Supported headers: Roll Number / Roll No / Roll.'
+            }
+
+        desired_elective_column = _find_column(df.columns, [
+            'How many electives do you want to register?',
+            'How many electives do you want to take?',
+            'No of electives',
+            'Number of electives',
+            'Desired Number of Subjects',
+            'Desired number of subjects'
+        ])
+
+        priority_columns = []
+        for col in df.columns:
+            key = _normalize_key(col)
+            match = re.match(r'^priority\s*(\d+)$', key)
+            if match:
+                priority_columns.append((int(match.group(1)), col))
+
+        priority_columns = [col for _, col in sorted(priority_columns, key=lambda x: x[0])]
+        if not priority_columns:
+            return {
+                'success': False,
+                'error': 'No priority columns found. Expected columns like Priority 1, Priority 2, ...'
             }
         
         # Validate that DataFrame is not empty
@@ -106,6 +153,12 @@ def extract_student_pref(file, semester, stream, batch):
             elective_for=semester, 
             stream=stream
         ).values_list('subject_name', flat=True))
+
+        # Build normalized lookup for robust matching
+        normalized_subject_lookup = {}
+        for subject_name in available_subjects:
+            normalized_subject_lookup[_normalize_key(subject_name)] = subject_name
+            normalized_subject_lookup[_normalize_subject(subject_name)] = subject_name
         
         # Process each row
         processed_count = 0
@@ -114,12 +167,7 @@ def extract_student_pref(file, semester, stream, batch):
         for index, row in df.iterrows():
             try:
                 # Extract data
-                roll_number = str(row['Roll Number']).strip()
-                priority_1 = str(row['Priority 1']).strip()
-                priority_2 = str(row['Priority 2']).strip()
-                priority_3 = str(row['Priority 3']).strip()
-                priority_4 = str(row['Priority 4']).strip()
-                priority_5 = str(row['Priority 5']).strip()
+                roll_number = _normalize_text(row.get(roll_number_column))
                 
                 # Validate roll number
                 if not roll_number or roll_number.lower() == 'nan':
@@ -128,30 +176,38 @@ def extract_student_pref(file, semester, stream, batch):
                 if len(roll_number) < 6:  # Minimum length check
                     errors.append(f'Row {index + 2}: Invalid roll number format. Expected format: 079bct007')
                     continue
-                # Collect all priorities
-                priorities = [priority_1, priority_2, priority_3, priority_4, priority_5]
+                # Collect all priorities from Priority 1..N
+                priorities = [_normalize_text(row.get(col)) for col in priority_columns]
                 
                 # Remove empty/nan values
                 priorities = [p for p in priorities if p and p.lower() != 'nan']
+
+                if not priorities:
+                    errors.append(f'Row {index + 2}: No priorities provided')
+                    continue
+
                   # Validate that subjects exist in database (flexible matching)
                 invalid_subjects = []
                 matched_subjects = {}  # Store mapping of input to actual database subject
                 
                 for priority in priorities:
-                    # Try exact match first
-                    exact_match = None
-                    for db_subject in available_subjects:
-                        if priority.lower() == db_subject.lower():
-                            exact_match = db_subject
-                            break
-                    
-                    if exact_match:
+                    priority_key = _normalize_key(priority)
+                    priority_subject_key = _normalize_subject(priority)
+
+                    exact_match = normalized_subject_lookup.get(priority_key) or normalized_subject_lookup.get(priority_subject_key)
+
+                    if exact_match is not None:
                         matched_subjects[priority] = exact_match
                     else:
-                        # Try partial match (input subject is contained in database subject)
+                        # Try partial match in both directions
                         partial_match = None
                         for db_subject in available_subjects:
-                            if priority.lower() in db_subject.lower():
+                            db_key = _normalize_key(db_subject)
+                            db_subject_key = _normalize_subject(db_subject)
+                            if (
+                                priority_key in db_key or db_key in priority_key or
+                                priority_subject_key in db_subject_key or db_subject_key in priority_subject_key
+                            ):
                                 partial_match = db_subject
                                 break
                         
@@ -164,32 +220,52 @@ def extract_student_pref(file, semester, stream, batch):
                     errors.append(f'Row {index + 2}: Invalid subject names: {", ".join(invalid_subjects)}')
                     continue
                 
-                # Check for duplicate subjects
-                if len(set(priorities)) != len(priorities):
+                # Check for duplicate subjects (after matching with DB names)
+                resolved_priorities = [matched_subjects[p] for p in priorities]
+                if len(set(resolved_priorities)) != len(resolved_priorities):
                     errors.append(f'Row {index + 2}: Duplicate subjects found. Each subject should appear only once.')
                     continue
                   # TODO: Save to database
                 # Find student by roll number and save priorities
                 try:
                     student = StudentProxyModel.objects.get(roll_number=roll_number)
-                    print(f"Processing: {roll_number} (Student: {student.name})")
-                    print(f"Priorities: {priorities}")
+
+                    # Determine desired number of subjects
+                    is_masters_student = bool(student.level and 'masters' in student.level.name.lower())
+                    default_desired_count = 3 if is_masters_student else 2
+                    desired_number_of_subjects = default_desired_count
+
+                    if desired_elective_column:
+                        desired_raw = row.get(desired_elective_column)
+                        if pd.notna(desired_raw):
+                            desired_text = _normalize_text(desired_raw)
+                            try:
+                                parsed_value = int(float(desired_text))
+                                if parsed_value > 0:
+                                    desired_number_of_subjects = parsed_value
+                            except (TypeError, ValueError):
+                                pass
+
+                    # Cannot request more subjects than priorities provided
+                    desired_number_of_subjects = min(desired_number_of_subjects, len(resolved_priorities))
                     
                     # Save priorities to database
                     from apps.student.models import ElectivePriority
                       # Clear existing priorities for this student for this session
                     ElectivePriority.objects.filter(student=student, session=semester).delete()
                       # Save new priorities
-                    for priority_index, subject_name in enumerate(priorities, 1):
-                        # Use matched subject name from database
-                        actual_subject_name = matched_subjects.get(subject_name, subject_name)
-                        subject = ElectiveSubject.objects.get(subject_name=actual_subject_name)
+                    for priority_index, actual_subject_name in enumerate(resolved_priorities, 1):
+                        subject = ElectiveSubject.objects.get(
+                            subject_name=actual_subject_name,
+                            elective_for=semester,
+                            stream=stream,
+                        )
                         ElectivePriority.objects.create(
                             student=student,
                             subject=subject,
                             priority=priority_index,
                             session=semester,  # Set the session/semester
-                            desired_number_of_subjects=2  # Default value
+                            desired_number_of_subjects=desired_number_of_subjects
                         )
                     
                 except StudentProxyModel.DoesNotExist:

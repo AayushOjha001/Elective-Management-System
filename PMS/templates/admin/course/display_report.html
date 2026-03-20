@@ -9,17 +9,20 @@
 
 {% block content %}
 {% if not is_download %}
-<form method="post" enctype="multipart/form-data">    {% csrf_token %}    {{form.as_p}}
-    <button class="button" type="submit"> View priority result</button>
-    <!--<button class="button" type="submit" name="_get_pdf"> Get PDF</button>-->
+<form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    {{form.as_p}}
+    <div class="submit-row">
+        <input class="default" type="submit" value="View priority result">
+    </div>
 </form>
 {% endif %}
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
 {% if has_data %}
 {% if is_data_entry_ok %}
 
-<!-- Add CSS for better styling -->
 <style>
+/* Edit mode controls — use Django admin color variables */
 .edit-controls {
     display: flex;
     gap: 5px;
@@ -28,134 +31,140 @@
 .move-btn, .delete-btn {
     background: none;
     border: 1px solid;
-    padding: 2px 6px;
+    padding: 2px 8px;
     border-radius: 3px;
     cursor: pointer;
-    font-size: 12px;
+    font-size: 11px;
 }
 .move-btn {
-    border-color: #007bff;
-    color: #007bff;
+    border-color: var(--link-fg, #417690);
+    color: var(--link-fg, #417690);
 }
 .move-btn:hover {
-    background-color: #007bff;
-    color: white;
+    background-color: var(--link-fg, #417690);
+    color: #fff;
 }
 .delete-btn {
-    border-color: #dc3545;
-    color: #dc3545;
+    border-color: var(--delete-button-bg, #ba2121);
+    color: var(--delete-button-bg, #ba2121);
 }
 .delete-btn:hover {
-    background-color: #dc3545;
-    color: white;
+    background-color: var(--delete-button-bg, #ba2121);
+    color: #fff;
 }
 .subject-selector {
     padding: 2px 4px;
-    border: 1px solid #ccc;
+    border: 1px solid var(--border-color, #ccc);
     border-radius: 3px;
+    font-size: 11px;
+}
+#allocationTable {
+    border-collapse: collapse;
+    width: 100%;
+    margin-top: 10px;
+}
+#allocationTable th {
+    background: var(--header-bg, #417690);
+    color: var(--header-link-color, #fff);
+    padding: 8px 10px;
+    text-align: left;
+    border-bottom: 2px solid var(--hairline-color, #ddd);
     font-size: 12px;
+    text-transform: uppercase;
 }
-.edit-mode .edit-controls {
-    display: flex !important;
+#allocationTable td {
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--hairline-color, #eee);
+    font-size: 13px;
 }
-.toggle-edit-btn {
-    margin-bottom: 15px;
-    background-color: #28a745;
-    color: white;
-    border: none;
-    padding: 10px 15px;
-    border-radius: 5px;
-    cursor: pointer;
-}
-.toggle-edit-btn:hover {
-    background-color: #218838;
-}
-.toggle-edit-btn.editing {
-    background-color: #6c757d;
-}
-.success-message {
-    background-color: #d4edda;
-    border: 1px solid #c3e6cb;
-    color: #155724;
-    padding: 10px;
-    border-radius: 5px;
-    margin: 10px 0;
-    display: none;
-}
-.error-message {
-    background-color: #f8d7da;
-    border: 1px solid #f5c6cb;
-    color: #721c24;
-    padding: 10px;
-    border-radius: 5px;
-    margin: 10px 0;
-    display: none;
+#allocationTable tr:hover td {
+    background: var(--darkened-bg, #f6f6f6);
 }
 </style>
 
 <!-- Toggle Edit Mode Button -->
-<button id="toggleEditMode" class="toggle-edit-btn" onclick="toggleEditMode()">
-    🎯 Enable Edit Mode
-</button>
+<div style="margin: 10px 0;">
+    <button id="toggleEditMode" class="button" onclick="toggleEditMode()">
+        Enable Edit Mode
+    </button>
+</div>
 
 <!-- Messages -->
-<div id="successMessage" class="success-message"></div>
-<div id="errorMessage" class="error-message"></div>
+<div id="successMessage" class="messagelist" style="display: none;">
+    <li class="success" id="successText"></li>
+</div>
+<div id="errorMessage" class="messagelist" style="display: none;">
+    <li class="error" id="errorText"></li>
+</div>
 
-<table border="2px" id="allocationTable">
-    <tr>
-        <th>Subject Name</th>
-        <th>Student count</th>
-        <th>Roll number</th>
-        <th>Student name</th>
-        <th class="edit-column" style="display: none;">Actions</th>
-    </tr>    {% for subject in result %}
-        {% if subject.student_count == 0 %}
-            <tr>
-                <td rowspan="1" class="sub_name">{{subject.subject_name}}</td>
-                <td rowspan="1" class="student-count" data-subject="{{subject.subject_name}}">{{subject.student_count}}</td>
-                <td>-</td>
-                <td>No students assigned</td>
-                <td class="edit-column" style="display: none;">-</td>
-            </tr>
-        {% else %}
-            {% for student in subject.students %}
-    <tr>
-        {% if forloop.first %}
-            <td rowspan="{{subject.student_count}}" class="sub_name">{{subject.subject_name}}</td>
-            <td rowspan="{{subject.student_count}}" class="student-count" data-subject="{{subject.subject_name}}">{{subject.student_count}}</td>
-        {% endif %}
-        <td>{{student.roll_number}}</td>
-        <td>{{student.name}}</td>
-        <td class="edit-column" style="display: none;">
-            <div class="edit-controls" style="display: none;">
-                <select class="subject-selector" data-student="{{student.name}}" data-current-subject="{{subject.subject_name}}">
-                    <option value="">Move to...</option>
-                    {% for other_subject in result %}
-                        {% if other_subject.subject_name != subject.subject_name %}
-                            <option value="{{other_subject.subject_name}}">{{other_subject.subject_name}}</option>
-                        {% endif %}
-                    {% endfor %}
-                </select>
-                <button class="move-btn" onclick="moveStudent('{{student.name}}', '{{subject.subject_name}}', this)">Move</button>
-                <button class="delete-btn" onclick="deleteStudent('{{student.name}}', '{{subject.subject_name}}', this)">Remove</button>
-            </div>
-        </td>
-    </tr>
-{% endfor %}
-        {% endif %}
+<fieldset class="module">
+    <h2>Allocation Results</h2>
+    <table id="allocationTable">
+        <thead>
+        <tr>
+            <th>Subject Name</th>
+            <th>Number of Students</th>
+            <th>Roll Number</th>
+            <th>Student Name</th>
+            <th class="edit-column" style="display: none;">Actions</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for subject in result %}
+            {% if subject.student_count == 0 %}
+                <tr>
+                    <td rowspan="1" class="sub_name">{{subject.subject_name}}</td>
+                    <td rowspan="1" class="student-count" data-subject="{{subject.subject_name}}">{{subject.student_count}}</td>
+                    <td>-</td>
+                    <td>No students assigned</td>
+                    <td class="edit-column" style="display: none;">-</td>
+                </tr>
+            {% else %}
+                {% for student in subject.students %}
+        <tr>
+            {% if forloop.first %}
+                <td rowspan="{{subject.student_count}}" class="sub_name">{{subject.subject_name}}</td>
+                <td rowspan="{{subject.student_count}}" class="student-count" data-subject="{{subject.subject_name}}">{{subject.student_count}}</td>
+            {% endif %}
+            <td>{{student.roll_number}}</td>
+            <td>{{student.name}}</td>
+            <td class="edit-column" style="display: none;">
+                <div class="edit-controls" style="display: none;">
+                    <select class="subject-selector" data-student="{{student.name}}" data-current-subject="{{subject.subject_name}}">
+                        <option value="">Move to...</option>
+                        {% for other_subject in result %}
+                            {% if other_subject.subject_name != subject.subject_name %}
+                                <option value="{{other_subject.subject_name}}">{{other_subject.subject_name}}</option>
+                            {% endif %}
+                        {% endfor %}
+                    </select>
+                    <button class="move-btn" onclick="moveStudent('{{student.name}}', '{{subject.subject_name}}', this)">Move</button>
+                    <button class="delete-btn" onclick="deleteStudent('{{student.name}}', '{{subject.subject_name}}', this)">Remove</button>
+                </div>
+            </td>
+        </tr>
     {% endfor %}
-</table>
+            {% endif %}
+        {% endfor %}
+        </tbody>
+    </table>
+</fieldset>
+
 {% else %}
-{% trans 'Probable reasons for error:'%}
-<br>
-{% trans 'Available subjects for selected semester:'%} {{available_subject_count }}
-
-<ul>
-    {% for message in outlier_messages %}
-    <li>{{message}}</li>
-    {% endfor %}
-</ul>
+<fieldset class="module">
+    <h2>Data Entry Incomplete</h2>
+    <div style="padding: 10px;">
+        <p>{% trans 'Probable reasons for error:'%}</p>
+        <p>{% trans 'Available subjects for selected semester:'%} {{available_subject_count }}</p>
+        {% if outlier_messages %}
+        <ul>
+            {% for message in outlier_messages %}
+            <li>{{message}}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+    </div>
+</fieldset>
 {% endif%}
 
 {% endif %}
@@ -173,14 +182,14 @@ function toggleEditMode() {
     isEditMode = !isEditMode;
     
     if (isEditMode) {
-        btn.textContent = '❌ Exit Edit Mode';
-        btn.classList.add('editing');
+        btn.textContent = 'Exit Edit Mode';
+        btn.classList.add('default');
         editColumns.forEach(col => col.style.display = 'table-cell');
         editControls.forEach(ctrl => ctrl.style.display = 'flex');
         document.getElementById('allocationTable').classList.add('edit-mode');
     } else {
-        btn.textContent = '🎯 Enable Edit Mode';
-        btn.classList.remove('editing');
+        btn.textContent = 'Enable Edit Mode';
+        btn.classList.remove('default');
         editColumns.forEach(col => col.style.display = 'none');
         editControls.forEach(ctrl => ctrl.style.display = 'none');
         document.getElementById('allocationTable').classList.remove('edit-mode');
@@ -193,12 +202,11 @@ function moveStudent(studentName, fromSubject, buttonElement) {
     const toSubject = selector.value;
     
     if (!toSubject) {
-        showMessage('Please select a subject to move to', 'error');
+        showMessage('Please select a subject to move to.', 'error');
         return;
     }
     
     if (confirm(`Move ${studentName} from "${fromSubject}" to "${toSubject}"?`)) {
-        // Disable button to prevent double-clicking
         buttonElement.disabled = true;
         
         fetch('{% url "move_student" %}', {
@@ -220,18 +228,15 @@ function moveStudent(studentName, fromSubject, buttonElement) {
         .then(data => {
             buttonElement.disabled = false;
             if (data.success) {
-                showMessage(`Successfully moved ${studentName} to ${toSubject}`, 'success');
-                // Refresh the page to show updated data
-                setTimeout(() => {
-                    location.reload();
-                }, 1500);
+                showMessage(`Successfully moved ${studentName} to ${toSubject}.`, 'success');
+                setTimeout(() => { location.reload(); }, 1500);
             } else {
                 showMessage(`Error: ${data.error}`, 'error');
             }
         })
         .catch(error => {
             buttonElement.disabled = false;
-            showMessage('Network error occurred', 'error');
+            showMessage('Network error occurred.', 'error');
             console.error('Error:', error);
         });
     }
@@ -259,18 +264,15 @@ function deleteStudent(studentName, fromSubject, buttonElement) {
         .then(data => {
             buttonElement.disabled = false;
             if (data.success) {
-                showMessage(`Successfully removed ${studentName} from ${fromSubject}`, 'success');
-                // Refresh the page to show updated data
-                setTimeout(() => {
-                    location.reload();
-                }, 1500);
+                showMessage(`Successfully removed ${studentName} from ${fromSubject}.`, 'success');
+                setTimeout(() => { location.reload(); }, 1500);
             } else {
                 showMessage(`Error: ${data.error}`, 'error');
             }
         })
         .catch(error => {
             buttonElement.disabled = false;
-            showMessage('Network error occurred', 'error');
+            showMessage('Network error occurred.', 'error');
             console.error('Error:', error);
         });
     }
@@ -280,16 +282,15 @@ function showMessage(text, type) {
     const successDiv = document.getElementById('successMessage');
     const errorDiv = document.getElementById('errorMessage');
     
-    // Hide both first
     successDiv.style.display = 'none';
     errorDiv.style.display = 'none';
     
     if (type === 'success') {
-        successDiv.textContent = text;
+        document.getElementById('successText').textContent = text;
         successDiv.style.display = 'block';
         setTimeout(() => successDiv.style.display = 'none', 5000);
     } else {
-        errorDiv.textContent = text;
+        document.getElementById('errorText').textContent = text;
         errorDiv.style.display = 'block';
         setTimeout(() => errorDiv.style.display = 'none', 5000);
     }
@@ -310,7 +311,7 @@ function getCookie(name) {
     return cookieValue;
 }
 
-// Existing AJAX code for level/faculty/semester selection
+// AJAX for level/faculty/semester selection
 $("#id_level").click(function () {
         var academic_level_id = $(this).val();
         $.ajax({
@@ -351,59 +352,50 @@ $("#id_level").click(function () {
     });
 
 
-
-
-
 </script>
 
 {% if result and semester and semester.pk %}
-<div class="mb-4" style="margin: 20px 0; padding: 15px; background-color: #f8f9fa; border-radius: 8px;">
-    <h3>📊 Download Options</h3>
-    <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 15px;">
+<fieldset class="module" style="margin-top: 20px;">
+    <h2>Download Results</h2>
+    <div style="padding: 10px;">
+        <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 15px;">
+            <a href="{% url 'download_allocation_result' semester.pk %}?batch={{ batch.pk }}&stream={{ stream.pk }}" 
+               class="button">
+                Download Combined Results (Excel)
+            </a>
+            
+            <a href="{% url 'download_master_excel_with_subjects' semester.pk %}?batch={{ batch.pk }}&stream={{ stream.pk }}" 
+               class="button">
+                Download Master Excel (All Subjects as Sheets)
+            </a>
+            
+            <a href="{% url 'download_subject_wise_excel_files' semester.pk %}?batch={{ batch.pk }}&stream={{ stream.pk }}" 
+               class="button">
+                Download All Subjects (Individual Files in ZIP)
+            </a>
+        </div>
         
-        <!-- Original combined download -->
-        <a href="{% url 'download_allocation_result' semester.pk %}?batch={{ batch.pk }}&stream={{ stream.pk }}" 
-           class="btn btn-primary" style="background-color: #007bff; color: white; padding: 10px 15px; text-decoration: none; border-radius: 5px;">
-            📁 Download Combined Results (Excel)
-        </a>
-        
-        <!-- Master Excel with separate sheets -->
-        <a href="{% url 'download_master_excel_with_subjects' semester.pk %}?batch={{ batch.pk }}&stream={{ stream.pk }}" 
-           class="btn btn-success" style="background-color: #28a745; color: white; padding: 10px 15px; text-decoration: none; border-radius: 5px;">
-            📋 Download Master Excel (All Subjects as Sheets)
-        </a>
-        
-        <!-- Subject-wise ZIP download -->
-        <a href="{% url 'download_subject_wise_excel_files' semester.pk %}?batch={{ batch.pk }}&stream={{ stream.pk }}" 
-           class="btn btn-warning" style="background-color: #ffc107; color: black; padding: 10px 15px; text-decoration: none; border-radius: 5px;">
-            🗂️ Download All Subjects (Individual Files in ZIP)
-        </a>
-    </div>
-    
-    <!-- Individual subject downloads -->
-    <div style="margin-top: 20px;">
-        <h4>📑 Download Individual Subject Files:</h4>
-        <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px;">
+        <h3>Individual Subject Downloads</h3>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px;">
             {% for subject in result %}
                 {% if subject.student_count > 0 %}
                 <a href="{% url 'download_individual_subject_excel' semester.pk subject.subject_name %}?batch={{ batch.pk }}&stream={{ stream.pk }}" 
-                   class="btn btn-outline-secondary" 
-                   style="border: 1px solid #6c757d; color: #6c757d; padding: 8px 12px; text-decoration: none; border-radius: 4px; font-size: 12px;">
-                    📄 {{ subject.subject_name }} ({{ subject.student_count }} students)
+                   class="button" style="font-size: 11px;">
+                    {{ subject.subject_name }} ({{ subject.student_count }})
                 </a>
                 {% endif %}
             {% endfor %}
         </div>
+        
+        <div class="help" style="margin-top: 15px;">
+            <strong>Note:</strong>
+            Combined Results &mdash; all data in one sheet.
+            Master Excel &mdash; separate sheet per subject.
+            ZIP &mdash; individual Excel files per subject.
+            Individual &mdash; specific subject with student list and attendance template.
+        </div>
     </div>
-    
-    <div style="margin-top: 15px; padding: 10px; background-color: #e9ecef; border-radius: 5px; font-size: 12px;">
-        <strong>💡 Download Options Explained:</strong><br>
-        • <strong>Combined Results:</strong> Single Excel file with all data in one sheet<br>
-        • <strong>Master Excel:</strong> Single Excel file with separate sheets for each subject<br>
-        • <strong>All Subjects (ZIP):</strong> Individual Excel files for each subject, packaged in a ZIP file<br>
-        • <strong>Individual Files:</strong> Download specific subject file with student list and attendance template
-    </div>
-</div>
+</fieldset>
 {% endif %}
 
 {% endblock %}
